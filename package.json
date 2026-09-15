@@ -1,0 +1,43 @@
+{
+  "name": "lm-smart",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LM Smart — Legal Metrology Smart Verification Platform (SIH 2026 PS26036)",
+  "workspaces": [
+    "apps/web",
+    "services/api",
+    "packages/shared-types",
+    "packages/validation",
+    "packages/config"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @lm-smart/api",
+    "dev:web": "npm run dev -w @lm-smart/web",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:ps": "docker compose ps",
+    "db:generate": "prisma generate --schema database/schema/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema database/schema/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema database/schema/schema.prisma",
+    "db:seed": "tsx database/seed/seed.ts",
+    "db:reset": "prisma migrate reset --schema database/schema/schema.prisma --force"
+  },
+  "prisma": {
+    "schema": "database/schema/schema.prisma",
+    "seed": "tsx database/seed/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.1",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {
+    "prisma": "^6.16.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

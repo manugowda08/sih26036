@@ -1,0 +1,520 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleCode {
+  OWNER
+  LMO
+  GATC
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  SCHEDULED
+  ASSIGNED
+  INSPECTION_IN_PROGRESS
+  PASSED
+  FAILED
+  CERTIFICATE_GENERATED
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  REVERIFICATION
+}
+
+enum ApplicationKind {
+  VERIFICATION
+  REVERIFICATION
+}
+
+enum InspectionResult {
+  PASS
+  FAIL
+  REQUIRES_REVIEW
+}
+
+enum CertificateStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum PhotoKind {
+  INSTRUMENT_FRONT
+  SERIAL_NUMBER
+  SEAL_STAMP
+  LOCATION_CONTEXT
+  MEASUREMENT_DISPLAY
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL_MOCK
+  WHATSAPP_MOCK
+}
+
+enum AuditAction {
+  LOGIN
+  REGISTER_INSTRUMENT
+  SUBMIT_APPLICATION
+  ASSIGN_OFFICER
+  START_INSPECTION
+  UPDATE_MEASUREMENT
+  UPLOAD_PHOTO
+  PASS_INSPECTION
+  FAIL_INSPECTION
+  GENERATE_CERTIFICATE
+  VERIFY_QR
+  REVOKE_CERTIFICATE
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  phone        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  userRoles             UserRole[]
+  businesses            Business[]
+  instruments           Instrument[]
+  applications          Application[]
+  lmOfficer             LmOfficer?
+  gatc                  Gatc?
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  assignedSchedules     VerificationSchedule[] @relation("AssignedOfficer")
+  inspections           Inspection[]           @relation("InspectionOfficer")
+  reviewedInspections   Inspection[]           @relation("InspectionReviewer")
+  issuedCertificates    Certificate[]          @relation("CertificateOfficer")
+  fraudReports          FraudReport[]
+
+  @@map("users")
+}
+
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      RoleCode @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model Location {
+  id        String  @id @default(uuid()) @db.Uuid
+  label     String?
+  address   String?
+  city      String?
+  district  String?
+  state     String?
+  latitude  Decimal @db.Decimal(10, 7)
+  longitude Decimal @db.Decimal(10, 7)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  businesses   Business[]
+  instruments  Instrument[]
+  gatcs        Gatc[]
+  officers     LmOfficer[]
+  inspections  Inspection[]
+  fraudReports FraudReport[]
+
+  @@index([city])
+  @@index([latitude, longitude])
+  @@map("locations")
+}
+
+model Business {
+  id         String   @id @default(uuid()) @db.Uuid
+  ownerId    String   @map("owner_id") @db.Uuid
+  name       String
+  gstin      String?
+  locationId String?  @map("location_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  owner        User           @relation(fields: [ownerId], references: [id])
+  location     Location?      @relation(fields: [locationId], references: [id])
+  instruments  Instrument[]
+  applications Application[]
+  certificates Certificate[]
+
+  @@index([ownerId])
+  @@map("businesses")
+}
+
+model InstrumentType {
+  id                      String   @id @default(uuid()) @db.Uuid
+  code                    String   @unique
+  name                    String
+  category                String
+  defaultPermissibleError Decimal  @map("default_permissible_error") @db.Decimal(12, 4)
+  unit                    String
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  instruments Instrument[]
+
+  @@map("instrument_types")
+}
+
+model Instrument {
+  id             String             @id @default(uuid()) @db.Uuid
+  instrumentCode String             @unique @map("instrument_code")
+  typeId         String             @map("type_id") @db.Uuid
+  businessId     String             @map("business_id") @db.Uuid
+  ownerId        String             @map("owner_id") @db.Uuid
+  manufacturer   String
+  model          String
+  serialNumber   String             @map("serial_number")
+  capacity       String
+  accuracyClass  String?            @map("accuracy_class")
+  purpose        String?
+  locationId     String             @map("location_id") @db.Uuid
+  registeredAt   DateTime           @default(now()) @map("registration_date")
+  lastVerifiedAt DateTime?          @map("last_verification_date")
+  nextDueAt      DateTime?          @map("next_due_date")
+  currentStatus  ApplicationStatus  @default(DRAFT) @map("current_status")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  type         InstrumentType @relation(fields: [typeId], references: [id])
+  business     Business       @relation(fields: [businessId], references: [id])
+  owner        User           @relation(fields: [ownerId], references: [id])
+  location     Location       @relation(fields: [locationId], references: [id])
+  applications Application[]
+  inspections  Inspection[]
+  certificates Certificate[]
+  history      VerificationHistory[]
+
+  @@index([serialNumber])
+  @@index([instrumentCode])
+  @@index([currentStatus])
+  @@index([nextDueAt])
+  @@map("instruments")
+}
+
+model Application {
+  id                String             @id @default(uuid()) @db.Uuid
+  applicationNumber String             @unique @map("application_number")
+  kind              ApplicationKind    @default(VERIFICATION)
+  status            ApplicationStatus  @default(DRAFT)
+  instrumentId      String             @map("instrument_id") @db.Uuid
+  businessId        String             @map("business_id") @db.Uuid
+  ownerId           String             @map("owner_id") @db.Uuid
+  submittedAt       DateTime?          @map("submitted_at")
+  notes             String?
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  instrument Instrument              @relation(fields: [instrumentId], references: [id])
+  business   Business                @relation(fields: [businessId], references: [id])
+  owner      User                    @relation(fields: [ownerId], references: [id])
+  documents  ApplicationDocument[]
+  schedule   VerificationSchedule?
+  inspections Inspection[]
+  certificates Certificate[]
+
+  @@index([status])
+  @@index([applicationNumber])
+  @@index([instrumentId])
+  @@map("applications")
+}
+
+model ApplicationDocument {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  filename      String
+  storedPath    String   @map("stored_path")
+  mimeType      String   @map("mime_type")
+  sizeBytes     Int      @map("size_bytes")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_documents")
+}
+
+model VerificationSchedule {
+  id               String   @id @default(uuid()) @db.Uuid
+  applicationId    String   @unique @map("application_id") @db.Uuid
+  scheduledAt      DateTime @map("scheduled_at")
+  assignedOfficerId String? @map("assigned_officer_id") @db.Uuid
+  assignmentScore  Decimal? @map("assignment_score") @db.Decimal(8, 2)
+  assignmentReason String?  @map("assignment_reason")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  assignedOfficer User?       @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+
+  @@index([scheduledAt])
+  @@index([assignedOfficerId])
+  @@map("verification_schedules")
+}
+
+model LmOfficer {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  employeeCode String   @unique @map("employee_code")
+  locationId   String?  @map("location_id") @db.Uuid
+  isAvailable  Boolean  @default(true) @map("is_available")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@map("lm_officers")
+}
+
+model Gatc {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @unique @map("user_id") @db.Uuid
+  centreCode String   @unique @map("centre_code")
+  name       String
+  locationId String?  @map("location_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@map("g_atcs")
+}
+
+model Inspection {
+  id                String             @id @default(uuid()) @db.Uuid
+  applicationId     String             @map("application_id") @db.Uuid
+  instrumentId      String             @map("instrument_id") @db.Uuid
+  officerId         String             @map("officer_id") @db.Uuid
+  reviewerId        String?            @map("reviewer_id") @db.Uuid
+  locationId        String?            @map("location_id") @db.Uuid
+  locationMismatch  Boolean            @default(false) @map("location_mismatch")
+  result            InspectionResult?
+  remarks           String?
+  startedAt         DateTime?          @map("started_at")
+  submittedAt       DateTime?          @map("submitted_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  application Application          @relation(fields: [applicationId], references: [id])
+  instrument  Instrument           @relation(fields: [instrumentId], references: [id])
+  officer     User                 @relation("InspectionOfficer", fields: [officerId], references: [id])
+  reviewer    User?                @relation("InspectionReviewer", fields: [reviewerId], references: [id])
+  location    Location?            @relation(fields: [locationId], references: [id])
+  checklist   InspectionChecklist?
+  measurements InspectionMeasurement[]
+  photos      InspectionPhoto[]
+  certificates Certificate[]
+
+  @@index([officerId])
+  @@index([instrumentId])
+  @@map("inspections")
+}
+
+model InspectionChecklist {
+  id                         String   @id @default(uuid()) @db.Uuid
+  inspectionId               String   @unique @map("inspection_id") @db.Uuid
+  identificationVerified     Boolean  @default(false) @map("identification_verified")
+  serialNumberMatches        Boolean  @default(false) @map("serial_number_matches")
+  physicalConditionOk        Boolean  @default(false) @map("physical_condition_ok")
+  displayFunctioning         Boolean  @default(false) @map("display_functioning")
+  zeroIndicationChecked      Boolean  @default(false) @map("zero_indication_checked")
+  measurementAccuracyChecked Boolean  @default(false) @map("measurement_accuracy_checked")
+  sealStampOk                Boolean  @default(false) @map("seal_stamp_ok")
+  documentsChecked           Boolean  @default(false) @map("documents_checked")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@map("inspection_checklists")
+}
+
+model InspectionMeasurement {
+  id               String   @id @default(uuid()) @db.Uuid
+  inspectionId     String   @map("inspection_id") @db.Uuid
+  capacity         Decimal  @db.Decimal(14, 4)
+  testLoad         Decimal  @map("test_load") @db.Decimal(14, 4)
+  observedValue    Decimal  @map("observed_value") @db.Decimal(14, 4)
+  error            Decimal  @db.Decimal(14, 4)
+  permissibleError Decimal  @map("permissible_error") @db.Decimal(14, 4)
+  result           InspectionResult
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@map("inspection_measurements")
+}
+
+model InspectionPhoto {
+  id           String    @id @default(uuid()) @db.Uuid
+  inspectionId String    @map("inspection_id") @db.Uuid
+  kind         PhotoKind
+  filename     String
+  storedPath   String    @map("stored_path")
+  capturedAt   DateTime  @default(now()) @map("timestamp")
+  latitude     Decimal?  @db.Decimal(10, 7)
+  longitude    Decimal?  @db.Decimal(10, 7)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@map("inspection_photos")
+}
+
+model Certificate {
+  id                String            @id @default(uuid()) @db.Uuid
+  certificateNumber String            @unique @map("certificate_number")
+  instrumentId      String            @map("instrument_id") @db.Uuid
+  applicationId     String            @map("application_id") @db.Uuid
+  inspectionId      String            @map("inspection_id") @db.Uuid
+  businessId        String            @map("business_id") @db.Uuid
+  officerId         String            @map("officer_id") @db.Uuid
+  authorityName     String            @map("authority_name")
+  verificationFee   Decimal           @map("verification_fee") @db.Decimal(12, 2)
+  verifiedAt        DateTime          @map("verification_date")
+  nextDueAt         DateTime          @map("next_due_date")
+  status            CertificateStatus @default(ACTIVE)
+  digitalHash       String            @map("digital_hash")
+  pdfPath           String?           @map("pdf_path")
+  issuedAt          DateTime          @default(now()) @map("issued_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
+  application Application @relation(fields: [applicationId], references: [id])
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+  business   Business   @relation(fields: [businessId], references: [id])
+  officer    User       @relation("CertificateOfficer", fields: [officerId], references: [id])
+  qrTokens   QrToken[]
+  history    VerificationHistory[]
+  fraudReports FraudReport[]
+
+  @@index([certificateNumber])
+  @@index([instrumentId])
+  @@index([status])
+  @@index([nextDueAt])
+  @@map("certificates")
+}
+
+model QrToken {
+  id            String    @id @default(uuid()) @db.Uuid
+  certificateId String    @map("certificate_id") @db.Uuid
+  token         String    @unique
+  nonce         String
+  issuedAt      DateTime  @map("issued_at")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  certificate Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([certificateId])
+  @@map("qr_tokens")
+}
+
+model VerificationHistory {
+  id            String   @id @default(uuid()) @db.Uuid
+  instrumentId  String   @map("instrument_id") @db.Uuid
+  certificateId String?  @map("certificate_id") @db.Uuid
+  event         String
+  notes         String?
+  occurredAt    DateTime @default(now()) @map("occurred_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  instrument  Instrument   @relation(fields: [instrumentId], references: [id])
+  certificate Certificate? @relation(fields: [certificateId], references: [id])
+
+  @@index([instrumentId])
+  @@map("verification_history")
+}
+
+model Notification {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  title     String
+  body      String
+  channel   NotificationChannel @default(IN_APP)
+  readAt    DateTime?           @map("read_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model FraudReport {
+  id            String   @id @default(uuid()) @db.Uuid
+  certificateId String?  @map("certificate_id") @db.Uuid
+  reporterId    String?  @map("reporter_id") @db.Uuid
+  reason        String
+  photoPath     String?  @map("photo_path")
+  locationId    String?  @map("location_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  certificate Certificate? @relation(fields: [certificateId], references: [id])
+  reporter    User?        @relation(fields: [reporterId], references: [id])
+  location    Location?    @relation(fields: [locationId], references: [id])
+
+  @@index([certificateId])
+  @@map("fraud_reports")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String?     @map("user_id") @db.Uuid
+  action    AuditAction
+  entity    String
+  entityId  String      @map("entity_id")
+  ip        String?
+  userAgent String?     @map("user_agent")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

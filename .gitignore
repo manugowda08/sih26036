@@ -1,0 +1,59 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+
+# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/build/
+apps/mobile/.packages
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Uploaded prototype files (keep folder placeholders)
+storage/certificates/*
+storage/photos/*
+storage/documents/*
+!storage/**/.gitkeep
+
+# Database dumps
+*.sql.gz
+*.dump
+
+# Coverage / build
+dist/
+coverage/
+*.tsbuildinfo
