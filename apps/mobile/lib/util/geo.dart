@@ -14,6 +14,3 @@ double distanceMetres(GeoPoint a, GeoPoint b) {
 }
 
 double _rad(double degrees) => degrees * pi / 180;
-
-/// Prototype field warning: more than 250 m from the registered instrument coordinates.
-const mismatchThresholdMetres = 250.0;

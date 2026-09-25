@@ -22,6 +22,10 @@ class AssignedJob {
     this.locationText,
     this.scheduledAt,
     this.instrumentCode,
+    this.capacity,
+    this.unit,
+    this.instrumentLat,
+    this.instrumentLng,
   });
 
   final String applicationId;
@@ -38,6 +42,10 @@ class AssignedJob {
   final String? locationText;
   final DateTime? scheduledAt;
   final String? instrumentCode;
+  final String? capacity;
+  final String? unit;
+  final double? instrumentLat;
+  final double? instrumentLng;
 
   factory AssignedJob.fromJson(Map<String, dynamic> json) {
     final instrument = json['instrument'] as Map<String, dynamic>?;
@@ -59,6 +67,10 @@ class AssignedJob {
       model: instrument?['model'] as String?,
       serialNumber: instrument?['serialNumber'] as String?,
       instrumentCode: instrument?['instrumentCode'] as String?,
+      capacity: instrument?['capacity']?.toString(),
+      unit: type?['unit'] as String?,
+      instrumentLat: _numOrNull(location?['latitude']),
+      instrumentLng: _numOrNull(location?['longitude']),
       locationText: [
         location?['address'],
         location?['city'],

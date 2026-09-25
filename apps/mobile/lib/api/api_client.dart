@@ -97,11 +97,17 @@ class OfficerDashboard {
 class ApiClient {
   ApiClient({http.Client? httpClient, String? baseUrl})
       : _http = httpClient ?? http.Client(),
-        baseUrl = (baseUrl ?? AppConfig.apiBaseUrl).replaceAll(RegExp(r'/$'), '');
+        _baseUrl = AppConfig.normalize(baseUrl ?? AppConfig.apiBaseUrl);
 
   final http.Client _http;
-  final String baseUrl;
+  String _baseUrl;
   String? _token;
+
+  String get baseUrl => _baseUrl;
+
+  void setBaseUrl(String url) {
+    _baseUrl = AppConfig.normalize(url);
+  }
 
   void setToken(String? token) {
     _token = token;

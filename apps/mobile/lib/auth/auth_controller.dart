@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
+import '../config.dart';
 import 'session_store.dart';
 
 class AuthController extends ChangeNotifier {
@@ -22,6 +23,8 @@ class AuthController extends ChangeNotifier {
     restoring = true;
     notifyListeners();
     try {
+      final storedUrl = await _store.readApiBaseUrl();
+      _api.setBaseUrl(AppConfig.resolve(stored: storedUrl));
       final token = await _store.readToken();
       if (token == null) {
         user = null;
@@ -39,10 +42,19 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<void> applyBaseUrl(String url) async {
+    final normalized = AppConfig.normalize(url);
+    _api.setBaseUrl(normalized);
+    await _store.saveApiBaseUrl(normalized);
+  }
+
+  Future<bool> login(String email, String password, {String? apiBaseUrl}) async {
     error = null;
     notifyListeners();
     try {
+      if (apiBaseUrl != null && apiBaseUrl.trim().isNotEmpty) {
+        await applyBaseUrl(apiBaseUrl);
+      }
       final result = await _api.login(email: email, password: password);
       _api.setToken(result.token);
       final verified = await _api.currentUser();
@@ -55,7 +67,7 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (_) {
-      error = 'Could not reach the LM Smart API at ${_api.baseUrl}';
+      error = 'Could not reach the LM Smart API at ${_api.baseUrl}. On a phone, use http://<laptop-LAN-IP>:4000 — not localhost.';
       notifyListeners();
       return false;
     }

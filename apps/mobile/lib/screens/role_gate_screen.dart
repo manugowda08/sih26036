@@ -20,7 +20,7 @@ class RoleGateScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          'Signed in as ${user.fullName} (${user.roles.join(', ')}).\n\nThis Phase 7 Step 1 field app is for LMO / GATC officers. Use the web portal for owner and admin work.',
+          'Signed in as ${user.fullName} (${user.roles.join(', ')}).\n\nThis Phase 7 field app is for LMO / GATC officers. Use the web portal for owner and admin work, including digital certificate generation.',
         ),
       ),
     );

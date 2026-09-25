@@ -22,10 +22,21 @@ class SessionStore {
   }
 
   Future<void> save({required String token, required AuthUser user}) async {
-    await _file().writeAsString(jsonEncode({'token': token, 'user': user.toJson()}));
+    final existing = await _read();
+    existing['token'] = token;
+    existing['user'] = user.toJson();
+    await _file().writeAsString(jsonEncode(existing));
+  }
+
+  Future<void> saveApiBaseUrl(String url) async {
+    final existing = await _read();
+    existing['apiBaseUrl'] = url;
+    await _file().writeAsString(jsonEncode(existing));
   }
 
   Future<String?> readToken() async => (await _read())['token'] as String?;
+
+  Future<String?> readApiBaseUrl() async => (await _read())['apiBaseUrl'] as String?;
 
   Future<AuthUser?> readUser() async {
     final user = (await _read())['user'];
@@ -34,7 +45,14 @@ class SessionStore {
   }
 
   Future<void> clear() async {
-    final file = _file();
-    if (file.existsSync()) await file.delete();
+    final existing = await _read();
+    existing.remove('token');
+    existing.remove('user');
+    if (existing.isEmpty) {
+      final file = _file();
+      if (file.existsSync()) await file.delete();
+    } else {
+      await _file().writeAsString(jsonEncode(existing));
+    }
   }
 }

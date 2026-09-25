@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../auth/auth_controller.dart';
-import 'inspection_form_screen.dart';
+import 'inspection_details_screen.dart';
 
 class LmoHomeScreen extends StatefulWidget {
   const LmoHomeScreen({super.key, required this.auth});
@@ -54,7 +54,7 @@ class _LmoHomeScreenState extends State<LmoHomeScreen> {
   Future<void> _open(AssignedJob job) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => InspectionFormScreen(auth: widget.auth, job: job),
+        builder: (_) => InspectionDetailsScreen(auth: widget.auth, job: job),
       ),
     );
     if (changed == true && mounted) await _load();
@@ -70,7 +70,7 @@ class _LmoHomeScreenState extends State<LmoHomeScreen> {
       appBar: AppBar(
         backgroundColor: navy,
         foregroundColor: Colors.white,
-        title: const Text('Assigned inspections'),
+        title: const Text('LMO dashboard'),
         actions: [
           IconButton(onPressed: _load, tooltip: 'Refresh', icon: const Icon(Icons.refresh)),
           IconButton(
@@ -100,7 +100,7 @@ class _LmoHomeScreenState extends State<LmoHomeScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              Text('Field jobs', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: navy)),
+              Text('Assigned inspections', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: navy)),
               const SizedBox(height: 8),
               if (jobs.isEmpty)
                 const Card(
@@ -140,7 +140,7 @@ class _LmoHomeScreenState extends State<LmoHomeScreen> {
                               const SizedBox(height: 8),
                               const Align(
                                 alignment: Alignment.centerRight,
-                                child: Text('Open inspection', style: TextStyle(color: navy, fontWeight: FontWeight.w600)),
+                                child: Text('View details', style: TextStyle(color: navy, fontWeight: FontWeight.w600)),
                               ),
                             ],
                           ),
