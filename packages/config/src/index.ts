@@ -21,6 +21,8 @@ export type AppEnv = {
   hmacSecret: string;
   webOrigin: string;
   storagePath: string;
+  intelligenceUrl: string;
+  intelligenceTimeoutMs: number;
 };
 
 export function loadEnv(): AppEnv {
@@ -48,5 +50,7 @@ export function loadEnv(): AppEnv {
     hmacSecret,
     webOrigin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
     storagePath: path.resolve(repoRoot(), process.env.STORAGE_PATH ?? "./storage"),
+    intelligenceUrl: (process.env.AI_URL ?? `http://localhost:${process.env.AI_PORT ?? 8000}`).replace(/\/$/, ""),
+    intelligenceTimeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 20000),
   };
 }

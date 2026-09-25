@@ -7,6 +7,8 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../api/api_client.dart';
 import '../auth/auth_controller.dart';
+import '../offline/models.dart';
+import '../offline/offline_controller.dart';
 import '../util/geo.dart';
 import '../util/measurement.dart';
 import 'inspection_details_screen.dart';
@@ -36,13 +38,17 @@ class InspectionFormScreen extends StatefulWidget {
   const InspectionFormScreen({
     super.key,
     required this.auth,
+    required this.offline,
     required this.job,
     required this.initial,
+    required this.draft,
   });
 
   final AuthController auth;
+  final OfflineController offline;
   final AssignedJob job;
   final InspectionDetail initial;
+  final InspectionDraft draft;
 
   @override
   State<InspectionFormScreen> createState() => _InspectionFormScreenState();
@@ -76,6 +82,9 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     _testLoad.addListener(() => setState(() {}));
     _observed.addListener(() => setState(() {}));
     _hydrate(widget.initial);
+    if (widget.draft.measurements.isNotEmpty || widget.draft.photos.isNotEmpty) {
+      _hydrate(widget.draft.toDetail());
+    }
     if (_detail.isLocked) _step = 4;
   }
 
@@ -171,6 +180,22 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     }
   }
 
+  Future<void> _persistLocal({bool submitted = false}) async {
+    await widget.offline.persistWorking(
+      draft: widget.draft,
+      locationMismatch: _locationMismatch,
+      latitude: _gps?.latitude,
+      longitude: _gps?.longitude,
+      checklist: Map<String, bool>.from(_checklist),
+      remarks: _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
+      result: _result,
+      serverInspectionId: _detail.id,
+      submitted: submitted,
+    );
+  }
+
+  Future<bool> _apiUp() => widget.offline.probe(widget.auth.api);
+
   Future<void> _uploadPhoto() async {
     final bytes = _pendingPhoto;
     if (bytes == null) return;
@@ -179,30 +204,42 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
       _error = null;
     });
     try {
-      final updated = await widget.auth.api.uploadPhoto(
-        _detail.id,
+      final photo = await widget.offline.addLocalPhoto(
+        draft: widget.draft,
         bytes: bytes,
         filename: _pendingName,
         kind: _photoKind,
         latitude: _gps?.latitude,
         longitude: _gps?.longitude,
       );
+      if (await _apiUp() && !_detail.id.startsWith('local:')) {
+        try {
+          final updated = await widget.auth.api.uploadPhoto(
+            _detail.id,
+            bytes: bytes,
+            filename: _pendingName,
+            kind: _photoKind,
+            latitude: _gps?.latitude,
+            longitude: _gps?.longitude,
+          );
+          photo.uploaded = true;
+          await widget.offline.store.saveDraft(widget.draft);
+          _applyDetail(updated);
+        } catch (_) {
+          _applyDetail(widget.draft.toDetail());
+        }
+      } else {
+        _applyDetail(widget.draft.toDetail());
+      }
       if (!mounted) return;
       setState(() {
         _pendingPhoto = null;
         _uploadingPhoto = false;
       });
-      _applyDetail(updated);
-    } on ApiException catch (err) {
-      if (!mounted) return;
-      setState(() {
-        _error = err.message;
-        _uploadingPhoto = false;
-      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Photo upload failed. Check the API connection and try again.';
+        _error = 'Could not attach evidence on this device';
         _uploadingPhoto = false;
       });
     }
@@ -262,6 +299,10 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
 
   Future<bool> _saveProgress() async {
     if (_detail.isLocked) return true;
+    await _persistLocal();
+    if (!await _apiUp() || _detail.id.startsWith('local:')) {
+      return true;
+    }
     try {
       final updated = await widget.auth.api.updateInspection(
         _detail.id,
@@ -274,14 +315,8 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
       if (!mounted) return true;
       _applyDetail(updated);
       return true;
-    } on ApiException catch (err) {
-      if (!mounted) return false;
-      setState(() => _error = err.message);
-      return false;
     } catch (_) {
-      if (!mounted) return false;
-      setState(() => _error = 'Could not save inspection notes to the API.');
-      return false;
+      return true;
     }
   }
 
@@ -300,24 +335,50 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     });
     try {
       await _saveProgress();
-      final updated = await widget.auth.api.addMeasurement(
-        _detail.id,
+      final errorValue = calculatedError(_observedValue!, _testLoadValue!);
+      final result = withinPrototypeTolerance(errorValue, _tolerance) ? 'PASS' : 'FAIL';
+      if (await _apiUp() && !_detail.id.startsWith('local:')) {
+        try {
+          final updated = await widget.auth.api.addMeasurement(
+            _detail.id,
+            capacity: _capacity,
+            testLoad: _testLoadValue!,
+            observedValue: _observedValue!,
+            permissibleError: _tolerance,
+          );
+          final local = await widget.offline.addLocalMeasurement(
+            draft: widget.draft,
+            capacity: _capacity,
+            testLoad: _testLoadValue!,
+            observedValue: _observedValue!,
+            error: errorValue,
+            permissibleError: _tolerance,
+            result: result,
+          );
+          local.synced = true;
+          await widget.offline.store.saveDraft(widget.draft);
+          if (!mounted) return;
+          _testLoad.clear();
+          _observed.clear();
+          setState(() => _addingMeasurement = false);
+          _applyDetail(updated);
+          return;
+        } catch (_) {}
+      }
+      await widget.offline.addLocalMeasurement(
+        draft: widget.draft,
         capacity: _capacity,
         testLoad: _testLoadValue!,
         observedValue: _observedValue!,
+        error: errorValue,
         permissibleError: _tolerance,
+        result: result,
       );
       if (!mounted) return;
       _testLoad.clear();
       _observed.clear();
       setState(() => _addingMeasurement = false);
-      _applyDetail(updated);
-    } on ApiException catch (err) {
-      if (!mounted) return;
-      setState(() {
-        _error = err.message;
-        _addingMeasurement = false;
-      });
+      _applyDetail(widget.draft.toDetail());
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -381,18 +442,35 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
         setState(() => _saving = false);
         return;
       }
-      final completed = await widget.auth.api.completeInspection(
-        _detail.id,
-        result: _result,
-        remarks: _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
-      );
+      if (await _apiUp() && !_detail.id.startsWith('local:')) {
+        try {
+          final completed = await widget.auth.api.completeInspection(
+            _detail.id,
+            result: _result,
+            remarks: _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
+          );
+          await _persistLocal(submitted: true);
+          widget.draft.syncStatus = SyncStatus.synced;
+          await widget.offline.store.saveDraft(widget.draft);
+          await widget.offline.refreshPending(widget.draft.officerId);
+          if (!mounted) return;
+          _applyDetail(completed);
+          setState(() => _saving = false);
+          final passNote = _result == 'PASS'
+              ? 'PASS recorded. Generate the digital certificate from the web portal — this app does not issue certificates.'
+              : 'Inspection submitted ($_result).';
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(passNote)));
+          Navigator.of(context).pop(true);
+          return;
+        } catch (_) {}
+      }
+      await _persistLocal(submitted: true);
       if (!mounted) return;
-      _applyDetail(completed);
+      _applyDetail(widget.draft.toDetail());
       setState(() => _saving = false);
-      final passNote = _result == 'PASS'
-          ? 'PASS recorded. Generate the digital certificate from the web portal — this app does not issue certificates.'
-          : 'Inspection submitted ($_result).';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(passNote)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved offline — Pending synchronization')),
+      );
       Navigator.of(context).pop(true);
     } on ApiException catch (err) {
       if (!mounted) return;
@@ -403,7 +481,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Submit failed. Check the API and try again.';
+        _error = 'Submit failed. The inspection was kept on this device.';
         _saving = false;
       });
     }
@@ -425,6 +503,17 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
       ),
       body: Column(
         children: [
+          if (!widget.offline.connectivity.apiReachable)
+            Material(
+              color: const Color(0xFFFEF3C7),
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'OFFLINE MODE — entries are saved on this device until you synchronize.',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF9A3412)),
+                ),
+              ),
+            ),
           if (_error != null)
             Material(
               color: const Color(0xFFFEE2E2),
@@ -659,7 +748,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.image_outlined),
             title: Text(photo.filename),
-            subtitle: Text('${_photoKinds[photo.kind] ?? photo.kind} · ${formatDateTime(photo.capturedAt)}'),
+            subtitle: Text('${_photoKinds[photo.kind] ?? photo.kind} · ${formatDateTime(photo.capturedAt)}${photo.localPath == null ? '' : ' · stored on device'}'),
           ),
         const SizedBox(height: 12),
         Wrap(

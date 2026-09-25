@@ -33,4 +33,14 @@ flutter run -d <ANDROID_DEVICE_ID> --dart-define=API_BASE_URL=http://<LAPTOP_LAN
 
 You can also type the same URL in the sign-in **API base URL** field. Android emulator (not a physical phone): `http://10.0.2.2:4000`.
 
-The JWT is stored in `%APPDATA%\lm_smart\session.json` on desktop/Android-style IO, and in browser `localStorage` on Flutter web. The Fastify API must already be running.
+The JWT is stored in `%APPDATA%\lm_smart\session.json` on desktop/Android-style IO, and in browser `localStorage` on Flutter web. Assigned inspections and pending field drafts are stored in a local SQLite database (`lm_smart_offline.db`). Photos are files under the app documents directory, not blobs in SQLite. Passwords are not stored.
+
+## Offline field inspection (Phase 7 Step 3)
+
+1. Login while the API is reachable so assignments can be cached.
+2. Turn off Wi-Fi/mobile data.
+3. Open a cached assignment, complete GPS / measurement / photo / PASS or FAIL, then Submit. The app shows **Saved offline — Pending synchronization**. Certificates are not generated offline.
+4. Restore connectivity and tap **Sync Now**.
+5. Confirm the same inspection on the web portal.
+
+If the API is down while the phone still has a network interface, Sync Now should show **FAILED** and keep the local record. Retry after the API is back.

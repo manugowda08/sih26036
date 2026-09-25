@@ -31,7 +31,16 @@ class AuthController extends ChangeNotifier {
         return;
       }
       _api.setToken(token);
-      user = await _api.currentUser();
+      try {
+        user = await _api.currentUser();
+        await _store.save(token: token, user: user!);
+      } catch (_) {
+        user = await _store.readUser();
+        if (user == null) {
+          await _store.clear();
+          _api.setToken(null);
+        }
+      }
     } catch (_) {
       await _store.clear();
       _api.setToken(null);

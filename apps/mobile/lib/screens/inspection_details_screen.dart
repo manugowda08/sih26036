@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../auth/auth_controller.dart';
+import '../offline/offline_controller.dart';
 import 'inspection_form_screen.dart';
 
 String formatDateTime(DateTime? value) {
@@ -12,9 +13,10 @@ String formatDateTime(DateTime? value) {
 }
 
 class InspectionDetailsScreen extends StatefulWidget {
-  const InspectionDetailsScreen({super.key, required this.auth, required this.job});
+  const InspectionDetailsScreen({super.key, required this.auth, required this.offline, required this.job});
 
   final AuthController auth;
+  final OfflineController offline;
   final AssignedJob job;
 
   @override
@@ -30,9 +32,7 @@ class _InspectionDetailsScreenState extends State<InspectionDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.job.inspectionId != null) {
-      _loadExisting();
-    }
+    _loadExisting();
   }
 
   Future<void> _loadExisting() async {
@@ -40,23 +40,39 @@ class _InspectionDetailsScreenState extends State<InspectionDetailsScreen> {
       _loading = true;
       _error = null;
     });
+    final officerId = widget.auth.user!.id;
+    final draft = await widget.offline.draftFor(officerId: officerId, applicationId: widget.job.applicationId);
+    if (draft != null && (draft.submittedLocally || draft.measurements.isNotEmpty || draft.photos.isNotEmpty)) {
+      if (!mounted) return;
+      setState(() {
+        _detail = draft.toDetail();
+        _loading = false;
+      });
+    }
+    if (widget.job.inspectionId == null && draft?.serverInspectionId == null) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
     try {
-      final detail = await widget.auth.api.getInspection(widget.job.inspectionId!);
+      final id = widget.job.inspectionId ?? draft!.serverInspectionId!;
+      final detail = await widget.auth.api.getInspection(id);
       if (!mounted) return;
       setState(() {
         _detail = detail;
         _loading = false;
+        _error = null;
       });
     } on ApiException catch (err) {
       if (!mounted) return;
       setState(() {
-        _error = err.message;
+        _error = _detail == null ? err.message : 'Showing cached inspection details (API unavailable)';
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load inspection details';
+        if (_detail == null) _error = 'Could not load inspection details';
         _loading = false;
       });
     }
@@ -67,41 +83,39 @@ class _InspectionDetailsScreenState extends State<InspectionDetailsScreen> {
       _starting = true;
       _error = null;
     });
+    final officerId = widget.auth.user!.id;
+    final draft = await widget.offline.ensureDraft(officerId: officerId, job: widget.job);
+    InspectionDetail detail = draft.toDetail();
     try {
-      InspectionDetail detail;
-      if (widget.job.inspectionId != null) {
-        detail = await widget.auth.api.getInspection(widget.job.inspectionId!);
+      if (widget.job.inspectionId != null || draft.serverInspectionId != null) {
+        detail = await widget.auth.api.getInspection(widget.job.inspectionId ?? draft.serverInspectionId!);
+        draft.serverInspectionId = detail.id;
+        await widget.offline.store.saveDraft(draft);
       } else {
         detail = await widget.auth.api.startInspection(widget.job.applicationId);
+        draft.serverInspectionId = detail.id;
+        await widget.offline.store.saveDraft(draft);
       }
-      if (!mounted) return;
-      final changed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => InspectionFormScreen(
-            auth: widget.auth,
-            job: widget.job,
-            initial: detail,
-          ),
-        ),
-      );
-      if (changed == true && mounted) {
-        Navigator.of(context).pop(true);
-      } else if (mounted) {
-        setState(() {
-          _detail = detail;
-          _starting = false;
-        });
-      }
-    } on ApiException catch (err) {
-      if (!mounted) return;
-      setState(() {
-        _error = err.message;
-        _starting = false;
-      });
     } catch (_) {
-      if (!mounted) return;
+      detail = draft.toDetail();
+    }
+    if (!mounted) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => InspectionFormScreen(
+          auth: widget.auth,
+          offline: widget.offline,
+          job: widget.job,
+          initial: detail,
+          draft: draft,
+        ),
+      ),
+    );
+    if (changed == true && mounted) {
+      Navigator.of(context).pop(true);
+    } else if (mounted) {
       setState(() {
-        _error = 'Could not start this inspection';
+        _detail = detail;
         _starting = false;
       });
     }

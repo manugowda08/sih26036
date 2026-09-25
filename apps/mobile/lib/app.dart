@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
 import 'auth/auth_controller.dart';
+import 'offline/offline_controller.dart';
 import 'screens/lmo_home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_gate_screen.dart';
 
 class LmSmartApp extends StatelessWidget {
-  const LmSmartApp({super.key, required this.auth});
+  LmSmartApp({super.key, required this.auth, OfflineController? offline})
+      : offline = offline ?? OfflineController();
 
   final AuthController auth;
+  final OfflineController offline;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +22,7 @@ class LmSmartApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: ListenableBuilder(
-        listenable: auth,
+        listenable: Listenable.merge([auth, offline]),
         builder: (context, _) {
           if (auth.restoring) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -28,7 +31,7 @@ class LmSmartApp extends StatelessWidget {
             return LoginScreen(auth: auth);
           }
           if (auth.user!.isFieldOfficer) {
-            return LmoHomeScreen(auth: auth);
+            return LmoHomeScreen(auth: auth, offline: offline);
           }
           return RoleGateScreen(auth: auth);
         },

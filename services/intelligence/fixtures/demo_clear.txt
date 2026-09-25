@@ -1,0 +1,13 @@
+DEMO - SAMPLE - NOT A LEGAL CERTIFICATE
+LM Smart prototype nameplate / supporting document
+Business: Om Demo Traders
+Instrument type: Electronic weighing machine
+Manufacturer: DemoTech Instruments
+Model: LM-500
+Serial No: SIH-DEMO-001
+Max Capacity: 30 kg
+Min Capacity: 0.1 kg
+Certificate No: CERT-DEMO-0001
+Verification date: 15 Mar 2026
+Valid until: 14 Mar 2027
+DEMO - SAMPLE - NOT A LEGAL CERTIFICATE

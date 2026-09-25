@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, ErrorText, Field, inputClass } from "@/components/ui";
+import { OcrAssist } from "@/components/OcrAssist";
 import { api, getToken } from "@/lib/api";
 
 type TypeOption = { id: string; name: string; code: string; category: string };
@@ -15,6 +16,18 @@ export default function NewInstrumentPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [newBusiness, setNewBusiness] = useState(false);
+  const [assistFile, setAssistFile] = useState<File | null>(null);
+  const [values, setValues] = useState({
+    typeId: "",
+    businessName: "",
+    manufacturer: "",
+    model: "",
+    serialNumber: "",
+    capacity: "",
+    previousCertificateNumber: "",
+    lastVerifiedAt: "",
+    nextDueAt: "",
+  });
 
   useEffect(() => {
     if (!getToken()) {
@@ -45,21 +58,21 @@ export default function NewInstrumentPage() {
       state: String(form.get("state")),
     };
     const body: Record<string, unknown> = {
-      typeId: String(form.get("typeId")),
-      manufacturer: String(form.get("manufacturer")),
-      model: String(form.get("model")),
-      serialNumber: String(form.get("serialNumber")),
-      capacity: String(form.get("capacity")),
+      typeId: String(form.get("typeId") || values.typeId),
+      manufacturer: String(form.get("manufacturer") || values.manufacturer),
+      model: String(form.get("model") || values.model),
+      serialNumber: String(form.get("serialNumber") || values.serialNumber),
+      capacity: String(form.get("capacity") || values.capacity),
       accuracyClass: String(form.get("accuracyClass") || ""),
       purpose: String(form.get("purpose") || ""),
       location,
-      previousCertificateNumber: String(form.get("previousCertificateNumber") || ""),
-      lastVerifiedAt: String(form.get("lastVerifiedAt") || ""),
-      nextDueAt: String(form.get("nextDueAt") || ""),
+      previousCertificateNumber: String(form.get("previousCertificateNumber") || values.previousCertificateNumber),
+      lastVerifiedAt: String(form.get("lastVerifiedAt") || values.lastVerifiedAt),
+      nextDueAt: String(form.get("nextDueAt") || values.nextDueAt),
     };
     if (newBusiness) {
       body.business = {
-        name: String(form.get("businessName")),
+        name: String(form.get("businessName") || values.businessName),
         gstin: String(form.get("gstin") || ""),
         location,
       };
@@ -87,9 +100,58 @@ export default function NewInstrumentPage() {
       <form onSubmit={onSubmit} className="grid gap-6 rounded border border-slate-200 bg-white p-6 md:grid-cols-2">
         <div className="md:col-span-2">
           <ErrorText message={error} />
+          <div className="mb-4">
+            <Field label="Optional document to suggest fields (PDF/JPG/PNG)">
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                className="text-sm"
+                onChange={(event) => setAssistFile(event.target.files?.[0] ?? null)}
+              />
+            </Field>
+            <div className="mt-3">
+              <OcrAssist
+                file={assistFile}
+                onAccept={(key, value) => {
+                  const current = values as Record<string, string>;
+                  const map: Record<string, string> = {
+                    manufacturer: "manufacturer",
+                    model: "model",
+                    serialNumber: "serialNumber",
+                    maxCapacity: "capacity",
+                    businessName: "businessName",
+                    certificateNumber: "previousCertificateNumber",
+                    verificationDate: "lastVerifiedAt",
+                    expiryDate: "nextDueAt",
+                  };
+                  if (key === "instrumentType") {
+                    const match = types.find(
+                      (type) =>
+                        type.name.toLowerCase().includes(value.toLowerCase()) ||
+                        value.toLowerCase().includes(type.name.toLowerCase()) ||
+                        type.code.toLowerCase() === value.toLowerCase(),
+                    );
+                    if (match) {
+                      if (values.typeId && values.typeId !== match.id && !window.confirm("Replace the selected instrument type with the OCR suggestion?")) {
+                        return;
+                      }
+                      setValues((prev) => ({ ...prev, typeId: match.id }));
+                    }
+                    return;
+                  }
+                  const target = map[key];
+                  if (!target) return;
+                  if (current[target] && current[target] !== value && !window.confirm(`Replace existing ${target} with the OCR suggestion?`)) {
+                    return;
+                  }
+                  setValues((prev) => ({ ...prev, [target]: value }));
+                }}
+              />
+            </div>
+          </div>
         </div>
         <Field label="Instrument type">
-          <select name="typeId" required className={inputClass()}>
+          <select name="typeId" required className={inputClass()} value={values.typeId} onChange={(event) => setValues((prev) => ({ ...prev, typeId: event.target.value }))}>
             <option value="">Select type</option>
             {types.map((type) => (
               <option key={type.id} value={type.id}>
@@ -100,7 +162,7 @@ export default function NewInstrumentPage() {
         </Field>
         <Field label="Business / establishment">
           {newBusiness || businesses.length === 0 ? (
-            <input name="businessName" required placeholder="Business name" className={inputClass()} />
+            <input name="businessName" required placeholder="Business name" className={inputClass()} value={values.businessName} onChange={(event) => setValues((prev) => ({ ...prev, businessName: event.target.value }))} />
           ) : (
             <select name="businessId" required className={inputClass()}>
               {businesses.map((item) => (
@@ -122,16 +184,16 @@ export default function NewInstrumentPage() {
           </Field>
         ) : <div />}
         <Field label="Manufacturer">
-          <input name="manufacturer" required className={inputClass()} />
+          <input name="manufacturer" required className={inputClass()} value={values.manufacturer} onChange={(event) => setValues((prev) => ({ ...prev, manufacturer: event.target.value }))} />
         </Field>
         <Field label="Model">
-          <input name="model" required className={inputClass()} />
+          <input name="model" required className={inputClass()} value={values.model} onChange={(event) => setValues((prev) => ({ ...prev, model: event.target.value }))} />
         </Field>
         <Field label="Serial number">
-          <input name="serialNumber" required className={inputClass()} />
+          <input name="serialNumber" required className={inputClass()} value={values.serialNumber} onChange={(event) => setValues((prev) => ({ ...prev, serialNumber: event.target.value }))} />
         </Field>
         <Field label="Capacity / range">
-          <input name="capacity" required placeholder="e.g. 30 kg" className={inputClass()} />
+          <input name="capacity" required placeholder="e.g. 30 kg" className={inputClass()} value={values.capacity} onChange={(event) => setValues((prev) => ({ ...prev, capacity: event.target.value }))} />
         </Field>
         <Field label="Accuracy class (optional)">
           <input name="accuracyClass" className={inputClass()} />
@@ -155,13 +217,13 @@ export default function NewInstrumentPage() {
           <h3 className="mb-3 font-semibold text-navy">Existing certificate (if any)</h3>
         </div>
         <Field label="Previous certificate number">
-          <input name="previousCertificateNumber" className={inputClass()} />
+          <input name="previousCertificateNumber" className={inputClass()} value={values.previousCertificateNumber} onChange={(event) => setValues((prev) => ({ ...prev, previousCertificateNumber: event.target.value }))} />
         </Field>
         <Field label="Last verification date">
-          <input name="lastVerifiedAt" type="date" className={inputClass()} />
+          <input name="lastVerifiedAt" type="date" className={inputClass()} value={values.lastVerifiedAt} onChange={(event) => setValues((prev) => ({ ...prev, lastVerifiedAt: event.target.value }))} />
         </Field>
         <Field label="Valid until / next due date">
-          <input name="nextDueAt" type="date" className={inputClass()} />
+          <input name="nextDueAt" type="date" className={inputClass()} value={values.nextDueAt} onChange={(event) => setValues((prev) => ({ ...prev, nextDueAt: event.target.value }))} />
         </Field>
         <div className="md:col-span-2">
           <button disabled={pending} className="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">

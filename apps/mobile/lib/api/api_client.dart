@@ -158,6 +158,17 @@ class ApiClient {
     return AuthUser.fromJson(await _readJson(response));
   }
 
+  Future<bool> ping({Duration timeout = const Duration(seconds: 4)}) async {
+    try {
+      final response = await _http
+          .get(Uri.parse('$baseUrl/api/health'), headers: _headers(jsonBody: false))
+          .timeout(timeout);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<OfficerDashboard> officerDashboard() async {
     final response = await _http.get(
       Uri.parse('$baseUrl/api/dashboard/officer'),

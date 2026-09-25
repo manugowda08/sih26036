@@ -153,6 +153,8 @@ export function presentApplication(
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       createdAt: doc.createdAt,
+      ocrAnalyzedAt: "ocrAnalyzedAt" in doc ? doc.ocrAnalyzedAt : null,
+      ocrResult: "ocrResult" in doc ? doc.ocrResult : null,
     })),
   };
 }

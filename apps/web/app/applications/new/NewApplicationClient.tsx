@@ -1,11 +1,21 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell, ErrorText, Field, inputClass } from "@/components/ui";
+import { OcrAssist } from "@/components/OcrAssist";
 import { api, getToken } from "@/lib/api";
 
-type Instrument = { id: string; instrumentCode: string; serialNumber: string; lastVerifiedAt: string | null };
+type Instrument = {
+  id: string;
+  instrumentCode: string;
+  serialNumber: string;
+  manufacturer: string;
+  model: string;
+  capacity: string;
+  lastVerifiedAt: string | null;
+  type?: { name: string };
+};
 
 export default function NewApplicationClient() {
   const router = useRouter();
@@ -14,8 +24,14 @@ export default function NewApplicationClient() {
   const preselectedKind = search.get("kind") === "REVERIFICATION" ? "REVERIFICATION" : "VERIFICATION";
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [instrumentId, setInstrumentId] = useState(preselected);
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const selected = useMemo(
+    () => instruments.find((item) => item.id === instrumentId) ?? null,
+    [instruments, instrumentId],
+  );
 
   useEffect(() => {
     if (!getToken()) {
@@ -43,14 +59,14 @@ export default function NewApplicationClient() {
         },
       });
 
-      const file = (form.elements.namedItem("document") as HTMLInputElement).files?.[0];
-      if (file) {
+      const uploadFile = file ?? (form.elements.namedItem("document") as HTMLInputElement).files?.[0];
+      if (uploadFile) {
         const upload = new FormData();
-        upload.append("file", file);
+        upload.append("file", uploadFile);
         await api(`/api/applications/${created.id}/documents`, { method: "POST", formData: upload });
       }
 
-      await api(`/api/applications/${created.id}/submit`, { method: "POST" });
+      await api(`/api/applications/${created.id}/submit`, { method: "POST", body: {} });
       router.push(`/applications/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit application");
@@ -64,7 +80,7 @@ export default function NewApplicationClient() {
       <h2 className="mb-2 text-2xl font-semibold text-navy">Apply for verification</h2>
       <p className="mb-6 max-w-2xl text-sm text-slate-600">
         Select a registered instrument, attach supporting documents, and submit the application for
-        departmental processing.
+        departmental processing. OCR suggestions are optional assistance only.
       </p>
       <form onSubmit={onSubmit} className="max-w-xl space-y-4 rounded border border-slate-200 bg-white p-6">
         <ErrorText message={error} />
@@ -91,8 +107,30 @@ export default function NewApplicationClient() {
           </select>
         </Field>
         <Field label="Required document (PDF/JPG/PNG)">
-          <input name="document" type="file" required accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" className="text-sm" />
+          <input
+            name="document"
+            type="file"
+            required
+            accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+            className="text-sm"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          />
         </Field>
+        <OcrAssist
+          file={file}
+          instrumentId={instrumentId || undefined}
+          registered={
+            selected
+              ? {
+                  manufacturer: selected.manufacturer,
+                  model: selected.model,
+                  serialNumber: selected.serialNumber,
+                  capacity: selected.capacity,
+                  typeName: selected.type?.name ?? null,
+                }
+              : null
+          }
+        />
         <Field label="Remarks (optional)">
           <textarea name="notes" rows={3} className={inputClass()} />
         </Field>

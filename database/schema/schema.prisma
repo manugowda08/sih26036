@@ -255,6 +255,9 @@ model ApplicationDocument {
   storedPath    String   @map("stored_path")
   mimeType      String   @map("mime_type")
   sizeBytes     Int      @map("size_bytes")
+  ocrRawText    String?  @map("ocr_raw_text") @db.Text
+  ocrResult     Json?    @map("ocr_result")
+  ocrAnalyzedAt DateTime? @map("ocr_analyzed_at")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

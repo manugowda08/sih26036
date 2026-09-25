@@ -130,15 +130,24 @@ Expiry buckets are computed from `certificates.next_due_date`: 90+ days, 30–90
 | POST | `/api/fraud/reports` | Public report |
 | GET | `/api/fraud/heatmap` | Advisory clustering |
 
-## Intelligence (Phase 8, FastAPI `:8000`)
+## Intelligence (Phase 8 Step 1, FastAPI `:8000`)
+
+The browser never calls FastAPI. Fastify proxies after JWT auth.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/ai/ocr` | Extract fields; ask for manual verify if low confidence |
-| POST | `/ai/risk-score` | Advisory score + reasons |
+| GET | `/api/intelligence/health` | Whether the Python service is up |
+| POST | `/api/intelligence/ocr` | Multipart `file`; optional `instrumentId` / `documentId` |
 
-AI output is advisory. The authorized officer remains the decision-maker.
+Python:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | `{ "status": "ok" }` |
+| POST | `/ocr/extract` | Structured extraction |
+
+OCR output is advisory. Mismatches are review signals, not fraud. If FastAPI is down, Fastify returns **503** for the OCR route only; applications still submit.
 
 ## Later phases
 
-Certificate, public QR, fraud, and intelligence routes are documented above and are **not** implemented yet.
+Fraud clustering and risk scoring are **not** implemented yet.

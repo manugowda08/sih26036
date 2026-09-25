@@ -14,6 +14,7 @@ import { schedulingRoutes } from "./routes/scheduling.js";
 import { inspectionRoutes } from "./routes/inspections.js";
 import { certificateRoutes } from "./routes/certificates.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { intelligenceRoutes } from "./routes/intelligence.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -79,6 +80,7 @@ export async function buildApp(env: AppEnv) {
   await app.register(inspectionRoutes);
   await app.register(certificateRoutes);
   await app.register(notificationRoutes);
+  await app.register(intelligenceRoutes);
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error(error);

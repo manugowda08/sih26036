@@ -79,6 +79,30 @@ class AssignedJob {
       scheduledAt: _parseDate(schedule?['scheduledAt']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': applicationId,
+        'applicationNumber': applicationNumber,
+        'status': status,
+        'kind': kind,
+        'inspectionId': inspectionId,
+        'owner': {'fullName': ownerName},
+        'business': {'name': businessName},
+        'instrument': {
+          'instrumentCode': instrumentCode,
+          'manufacturer': manufacturer,
+          'model': model,
+          'serialNumber': serialNumber,
+          'capacity': capacity,
+          'type': {'name': instrumentType, 'unit': unit},
+          'location': {
+            'address': locationText,
+            'latitude': instrumentLat,
+            'longitude': instrumentLng,
+          },
+        },
+        'schedule': {'scheduledAt': scheduledAt?.toIso8601String()},
+      };
 }
 
 class InspectionPhoto {
@@ -87,12 +111,14 @@ class InspectionPhoto {
     required this.filename,
     required this.kind,
     this.capturedAt,
+    this.localPath,
   });
 
   final String id;
   final String filename;
   final String kind;
   final DateTime? capturedAt;
+  final String? localPath;
 
   factory InspectionPhoto.fromJson(Map<String, dynamic> json) {
     return InspectionPhoto(
@@ -100,6 +126,7 @@ class InspectionPhoto {
       filename: json['filename'] as String? ?? '',
       kind: json['kind'] as String? ?? 'INSTRUMENT_FRONT',
       capturedAt: _parseDate(json['capturedAt']),
+      localPath: json['localPath'] as String?,
     );
   }
 }

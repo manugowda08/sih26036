@@ -37,21 +37,22 @@ export async function api<T>(
   const token = getToken();
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (!options.formData) headers["Content-Type"] = "application/json";
+  const hasJsonBody = !options.formData && options.body !== undefined;
+  if (hasJsonBody) headers["Content-Type"] = "application/json";
 
   const response = await fetch(`${API_URL}${path}`, {
     method: options.method ?? "GET",
     headers,
     body: options.formData
       ? options.formData
-      : options.body
+      : hasJsonBody
         ? JSON.stringify(options.body)
         : undefined,
   });
 
-  const data = (await response.json().catch(() => ({}))) as T & { error?: string };
+  const data = (await response.json().catch(() => ({}))) as T & { error?: string; message?: string };
   if (!response.ok) {
-    throw new Error(data.error || `Request failed (${response.status})`);
+    throw new Error(data.error || data.message || `Request failed (${response.status})`);
   }
   return data;
 }
