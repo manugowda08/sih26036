@@ -1,130 +1,56 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { AppShell, ErrorText, Field, StatusBadge, inputClass } from "@/components/ui";
-import { api, downloadAuthorized, getStoredUser, getToken } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { useRouter } from "next/navigation";
+import { AppShell, ErrorText, Field, inputClass } from "@/components/ui";
+import { OcrAssist } from "@/components/OcrAssist";
+import { api, getToken } from "@/lib/api";
 
-type Inspection = {
+type TypeOption = {
   id: string;
-  result: string | null;
-  remarks: string | null;
-  locationMismatch: boolean;
-  startedAt: string | null;
-  submittedAt: string | null;
-  location: {
-    latitude: number | null;
-    longitude: number | null;
-    city: string | null;
-  } | null;
-  locationEvidence: {
-    registered: {
-      latitude: number;
-      longitude: number;
-    };
-    captured: {
-      latitude: number;
-      longitude: number;
-    };
-    distanceMeters: number;
-    calculation: "POSTGIS";
-    advisory: true;
-  } | null;
-  application: {
-    applicationNumber: string;
-    status: string;
-    owner: {
-      fullName: string;
-      email: string;
-    } | null;
-    business: {
-      name: string;
-    } | null;
-    schedule: {
-      scheduledAt: string;
-    } | null;
-  } | null;
-  instrument: {
-    instrumentCode: string;
-    serialNumber: string;
-    manufacturer: string;
-    model: string;
-    capacity: string;
-    location: {
-      address: string | null;
-      city: string | null;
-      state: string | null;
-    } | null;
-    type: {
-      name: string;
-      unit: string;
-      defaultPermissibleError: number;
-    } | null;
-  } | null;
-  checklist: {
-    identificationVerified: boolean;
-    serialNumberMatches: boolean;
-    physicalConditionOk: boolean;
-    displayFunctioning: boolean;
-    zeroIndicationChecked: boolean;
-    measurementAccuracyChecked: boolean;
-    sealStampOk: boolean;
-    documentsChecked: boolean;
-  } | null;
-  measurements: Array<{
-    id: string;
-    capacity: number;
-    testLoad: number;
-    observedValue: number;
-    error: number;
-    permissibleError: number;
-    result: string;
-  }>;
-  photos: Array<{
-    id: string;
-    filename: string;
-    kind: string;
-    capturedAt: string;
-  }>;
-  certificate: {
-    id: string;
-    certificateNumber: string;
-    status: string;
-  } | null;
+  name: string;
+  code: string;
+  category: string;
 };
 
-const checklistFields = [
-  ["identificationVerified", "Identification verified"],
-  ["serialNumberMatches", "Serial number matches"],
-  ["physicalConditionOk", "Physical condition satisfactory"],
-  ["displayFunctioning", "Display functioning"],
-  ["zeroIndicationChecked", "Zero indication checked"],
-  ["measurementAccuracyChecked", "Measurement accuracy checked"],
-  ["sealStampOk", "Seal / stamp in order"],
-  ["documentsChecked", "Documents checked"],
-] as const;
+type Business = {
+  id: string;
+  name: string;
+};
 
-export default function InspectionDetailPage() {
-  const params = useParams<{ id: string }>();
+type CapturedLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+};
+
+export default function NewInstrumentPage() {
   const router = useRouter();
 
-  const [item, setItem] = useState<Inspection | null>(null);
+  const [types, setTypes] = useState<TypeOption[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [newBusiness, setNewBusiness] = useState(false);
+  const [assistFile, setAssistFile] = useState<File | null>(null);
 
-  const locked = Boolean(item?.submittedAt);
+  const [capturedLocation, setCapturedLocation] =
+    useState<CapturedLocation | null>(null);
 
-  const canIssue = (getStoredUser()?.roles ?? []).some((role) =>
-    ["ADMIN", "LMO", "GATC"].includes(role),
-  );
+  const [locationPending, setLocationPending] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
-  function load() {
-    return api<Inspection>(
-      `/api/inspections/${params.id}`,
-    ).then(setItem);
-  }
+  const [values, setValues] = useState({
+    typeId: "",
+    businessName: "",
+    manufacturer: "",
+    model: "",
+    serialNumber: "",
+    capacity: "",
+    previousCertificateNumber: "",
+    lastVerifiedAt: "",
+    nextDueAt: "",
+  });
 
   useEffect(() => {
     if (!getToken()) {
@@ -132,844 +58,605 @@ export default function InspectionDetailPage() {
       return;
     }
 
-    load().catch((err) =>
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Not found",
-      ),
-    );
-  }, [params.id, router]);
-
-  async function saveChecklist(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    if (!item) return;
-
-    setPending(true);
-    setError(null);
-
-    const form = new FormData(event.currentTarget);
-
-    const checklist: Record<string, boolean> = {};
-
-    for (const [key] of checklistFields) {
-      checklist[key] = form.get(key) === "on";
-    }
-
-    try {
-      const updated = await api<Inspection>(
-        `/api/inspections/${item.id}`,
-        {
-          method: "PUT",
-          body: {
-            remarks: String(
-              form.get("remarks") || "",
-            ),
-            locationMismatch:
-              form.get("locationMismatch") === "on",
-            latitude: form.get("latitude")
-              ? Number(form.get("latitude"))
-              : undefined,
-            longitude: form.get("longitude")
-              ? Number(form.get("longitude"))
-              : undefined,
-            checklist,
-          },
-        },
+    Promise.all([
+      api<TypeOption[]>("/api/instrument-types"),
+      api<Business[]>("/api/businesses"),
+    ])
+      .then(([typeRows, businessRows]) => {
+        setTypes(typeRows);
+        setBusinesses(businessRows);
+        setNewBusiness(businessRows.length === 0);
+      })
+      .catch((err) =>
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load form",
+        ),
       );
+  }, [router]);
 
-      setItem(updated);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not save",
+  function captureCurrentLocation() {
+    setLocationError(null);
+
+    if (!navigator.geolocation) {
+      setLocationError(
+        "Location services are not supported by this browser.",
       );
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function addMeasurement(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    if (!item) return;
-
-    setPending(true);
-    setError(null);
-
-    const form = new FormData(event.currentTarget);
-
-    const testLoad = Number(
-      form.get("testLoad"),
-    );
-
-    const observedValue = Number(
-      form.get("observedValue"),
-    );
-
-    try {
-      const updated = await api<Inspection>(
-        `/api/inspections/${item.id}/measurements`,
-        {
-          method: "POST",
-          body: {
-            capacity: Number(
-              form.get("capacity"),
-            ),
-            testLoad,
-            observedValue,
-            permissibleError: Number(
-              form.get("permissibleError"),
-            ),
-          },
-        },
-      );
-
-      setItem(updated);
-      event.currentTarget.reset();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not save measurement",
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function addPhoto(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    if (!item) return;
-
-    setPending(true);
-    setError(null);
-
-    const form = event.currentTarget;
-
-    const file = (
-      form.elements.namedItem(
-        "photo",
-      ) as HTMLInputElement
-    ).files?.[0];
-
-    if (!file) {
-      setPending(false);
       return;
     }
 
-    const payload = new FormData();
+    setLocationPending(true);
 
-    payload.append("file", file);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCapturedLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: Number.isFinite(position.coords.accuracy)
+            ? position.coords.accuracy
+            : null,
+        });
 
-    payload.append(
-      "kind",
-      String(
-        (
-          form.elements.namedItem(
-            "kind",
-          ) as HTMLSelectElement
-        ).value,
-      ),
+        setLocationPending(false);
+        setLocationError(null);
+      },
+      (geoError) => {
+        setLocationPending(false);
+
+        if (geoError.code === geoError.PERMISSION_DENIED) {
+          setLocationError(
+            "Location permission was denied. Allow location access in your browser and try again.",
+          );
+          return;
+        }
+
+        if (geoError.code === geoError.POSITION_UNAVAILABLE) {
+          setLocationError(
+            "Your current location could not be determined. Check location services and try again.",
+          );
+          return;
+        }
+
+        if (geoError.code === geoError.TIMEOUT) {
+          setLocationError(
+            "Location request timed out. Please try again.",
+          );
+          return;
+        }
+
+        setLocationError(
+          "Unable to capture the current location.",
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      },
     );
-
-    try {
-      const updated = await api<Inspection>(
-        `/api/inspections/${item.id}/photos`,
-        {
-          method: "POST",
-          formData: payload,
-        },
-      );
-
-      setItem(updated);
-      form.reset();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not upload photo",
-      );
-    } finally {
-      setPending(false);
-    }
   }
 
-  async function complete(
-    result:
-      | "PASS"
-      | "FAIL"
-      | "REQUIRES_REVIEW",
-  ) {
-    if (!item) return;
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    setPending(true);
     setError(null);
 
-    try {
-      const updated = await api<Inspection>(
-        `/api/inspections/${item.id}/complete`,
-        {
-          method: "POST",
-          body: {
-            result,
-            remarks: item.remarks,
-          },
-        },
-      );
-
-      setItem(updated);
-    } catch (err) {
+    if (!capturedLocation) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Could not complete inspection",
+        "Capture the registered instrument location before saving.",
       );
-    } finally {
-      setPending(false);
+      return;
     }
-  }
-
-  async function generateCertificate() {
-    if (!item) return;
 
     setPending(true);
-    setError(null);
+
+    const form = new FormData(event.currentTarget);
+
+    const location = {
+      address: String(form.get("address")),
+      city: String(form.get("city")),
+      district: String(form.get("district") || ""),
+      state: String(form.get("state")),
+      latitude: capturedLocation.latitude,
+      longitude: capturedLocation.longitude,
+    };
+
+    const body: Record<string, unknown> = {
+      typeId: String(form.get("typeId") || values.typeId),
+      manufacturer: String(
+        form.get("manufacturer") || values.manufacturer,
+      ),
+      model: String(form.get("model") || values.model),
+      serialNumber: String(
+        form.get("serialNumber") || values.serialNumber,
+      ),
+      capacity: String(
+        form.get("capacity") || values.capacity,
+      ),
+      accuracyClass: String(
+        form.get("accuracyClass") || "",
+      ),
+      purpose: String(form.get("purpose") || ""),
+      location,
+      previousCertificateNumber: String(
+        form.get("previousCertificateNumber") ||
+          values.previousCertificateNumber,
+      ),
+      lastVerifiedAt: String(
+        form.get("lastVerifiedAt") ||
+          values.lastVerifiedAt,
+      ),
+      nextDueAt: String(
+        form.get("nextDueAt") || values.nextDueAt,
+      ),
+    };
+
+    if (newBusiness) {
+      body.business = {
+        name: String(
+          form.get("businessName") || values.businessName,
+        ),
+        gstin: String(form.get("gstin") || ""),
+        location,
+      };
+    } else {
+      body.businessId = String(form.get("businessId"));
+    }
 
     try {
-      const cert = await api<{ id: string }>(
-        "/api/certificates",
+      const created = await api<{ id: string }>(
+        "/api/instruments",
         {
           method: "POST",
-          body: {
-            inspectionId: item.id,
-          },
+          body,
         },
       );
 
-      await load();
-
-      router.push(
-        `/certificates/${cert.id}`,
-      );
+      router.push(`/instruments/${created.id}`);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Could not generate certificate",
+          : "Could not register instrument",
       );
     } finally {
       setPending(false);
     }
   }
-
-  const demoTolerance =
-    item?.instrument?.type
-      ?.defaultPermissibleError ?? 0.5;
 
   return (
     <AppShell>
-      <ErrorText message={error} />
+      <h2 className="mb-4 text-2xl font-semibold text-navy">
+        Register instrument
+      </h2>
 
-      {item ? (
-        <div className="space-y-5">
-          <div className="rounded border border-slate-200 bg-white p-5">
-            <p className="text-xs uppercase tracking-widest text-slate-500">
-              Field inspection
-            </p>
+      <p className="mb-6 max-w-2xl text-sm text-slate-600">
+        Record the weighing or measuring instrument used in trade.
+        Existing paper certificate details are optional and used for
+        due-date tracking.
+      </p>
 
-            <h2 className="text-2xl font-semibold text-navy">
-              {item.instrument?.instrumentCode}
-            </h2>
+      <form
+        onSubmit={onSubmit}
+        className="grid gap-6 rounded border border-slate-200 bg-white p-6 md:grid-cols-2"
+      >
+        <div className="md:col-span-2">
+          <ErrorText message={error} />
 
-            <div className="mt-2 flex flex-wrap gap-2">
-              <StatusBadge
-                status={
-                  item.application?.status ??
-                  "ASSIGNED"
-                }
-              />
-
-              {item.result ? (
-                <StatusBadge
-                  status={item.result}
-                />
-              ) : null}
-            </div>
-
-            <p className="mt-3 text-sm">
-              Application{" "}
-              {
-                item.application
-                  ?.applicationNumber
-              }
-            </p>
-
-            <p className="text-sm">
-              Owner{" "}
-              {
-                item.application?.owner
-                  ?.fullName
-              }{" "}
-              ·{" "}
-              {
-                item.application?.business
-                  ?.name
-              }
-            </p>
-
-            <p className="text-sm">
-              Scheduled{" "}
-              {formatDateTime(
-                item.application?.schedule
-                  ?.scheduledAt,
-              )}
-            </p>
-
-            <p className="text-sm">
-              Started{" "}
-              {formatDateTime(
-                item.startedAt,
-              )}
-            </p>
-          </div>
-
-          <div className="rounded border border-slate-200 bg-white p-5 text-sm">
-            <h3 className="font-semibold">
-              Instrument
-            </h3>
-
-            <p>
-              {
-                item.instrument
-                  ?.manufacturer
-              }{" "}
-              {item.instrument?.model} · SN{" "}
-              {
-                item.instrument
-                  ?.serialNumber
-              }
-            </p>
-
-            <p>
-              Capacity / range:{" "}
-              {item.instrument?.capacity}
-            </p>
-
-            <p>
-              Type:{" "}
-              {item.instrument?.type?.name} (
-              {item.instrument?.type?.unit})
-            </p>
-
-            <p>
-              Location:{" "}
-              {
-                item.instrument?.location
-                  ?.address
-              }
-              ,{" "}
-              {
-                item.instrument?.location
-                  ?.city
-              }
-              ,{" "}
-              {
-                item.instrument?.location
-                  ?.state
-              }
-            </p>
-          </div>
-
-          <form
-            onSubmit={saveChecklist}
-            className="rounded border border-slate-200 bg-white p-5"
-          >
-            <h3 className="mb-3 font-semibold text-navy">
-              Checklist, GPS and remarks
-            </h3>
-
-            <div className="grid gap-2 md:grid-cols-2">
-              {checklistFields.map(
-                ([key, label]) => (
-                  <label
-                    key={key}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <input
-                      name={key}
-                      type="checkbox"
-                      defaultChecked={Boolean(
-                        item.checklist?.[
-                          key
-                        ],
-                      )}
-                      disabled={locked}
-                    />
-
-                    {label}
-                  </label>
-                ),
-              )}
-            </div>
-
-            <label className="mt-3 flex items-center gap-2 text-sm">
+          <div className="mb-4">
+            <Field label="Optional document to suggest fields (PDF/JPG/PNG)">
               <input
-                name="locationMismatch"
-                type="checkbox"
-                defaultChecked={
-                  item.locationMismatch
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                className="text-sm"
+                onChange={(event) =>
+                  setAssistFile(
+                    event.target.files?.[0] ?? null,
+                  )
                 }
-                disabled={locked}
-              />
-
-              Location mismatch observed
-            </label>
-
-            <div className="mt-3 grid gap-4 md:grid-cols-2">
-              <Field label="GPS latitude">
-                <input
-                  name="latitude"
-                  type="number"
-                  step="0.0001"
-                  defaultValue={
-                    item.location
-                      ?.latitude ?? ""
-                  }
-                  className={inputClass()}
-                  disabled={locked}
-                />
-              </Field>
-
-              <Field label="GPS longitude">
-                <input
-                  name="longitude"
-                  type="number"
-                  step="0.0001"
-                  defaultValue={
-                    item.location
-                      ?.longitude ?? ""
-                  }
-                  className={inputClass()}
-                  disabled={locked}
-                />
-              </Field>
-            </div>
-
-            {item.locationEvidence ? (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">
-                      Location evidence
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-600">
-                      Registered location
-                      compared with captured
-                      inspection GPS.
-                    </p>
-                  </div>
-
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-                    {
-                      item.locationEvidence
-                        .calculation
-                    }
-                  </span>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-sm text-slate-600">
-                    Distance from registered
-                    location
-                  </p>
-
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {item.locationEvidence.distanceMeters.toFixed(
-                      1,
-                    )}{" "}
-                    m
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Registered GPS
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-800">
-                      {item.locationEvidence.registered.latitude.toFixed(
-                        6,
-                      )}
-                      ,{" "}
-                      {item.locationEvidence.registered.longitude.toFixed(
-                        6,
-                      )}
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Captured GPS
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-800">
-                      {item.locationEvidence.captured.latitude.toFixed(
-                        6,
-                      )}
-                      ,{" "}
-                      {item.locationEvidence.captured.longitude.toFixed(
-                        6,
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="mt-4 text-xs text-slate-500">
-                  This location evidence is
-                  provided for officer review.
-                  It is not an automatic
-                  compliance or Legal Metrology
-                  decision.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4">
-                <p className="font-medium text-slate-800">
-                  Location evidence
-                </p>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Capture and save field GPS
-                  to calculate the distance
-                  from the registered
-                  instrument location.
-                </p>
-              </div>
-            )}
-
-            <Field label="Remarks">
-              <textarea
-                name="remarks"
-                rows={3}
-                defaultValue={
-                  item.remarks ?? ""
-                }
-                className={inputClass()}
-                disabled={locked}
               />
             </Field>
 
-            {!locked ? (
-              <button
-                disabled={pending}
-                className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
-              >
-                Save inspection notes
-              </button>
-            ) : null}
-          </form>
+            <div className="mt-3">
+              <OcrAssist
+                file={assistFile}
+                onAccept={(key, value) => {
+                  const current =
+                    values as Record<string, string>;
 
-          <form
-            onSubmit={addMeasurement}
-            className="rounded border border-slate-200 bg-white p-5"
-          >
-            <h3 className="font-semibold text-navy">
-              Test measurement
-            </h3>
+                  const map: Record<string, string> = {
+                    manufacturer: "manufacturer",
+                    model: "model",
+                    serialNumber: "serialNumber",
+                    maxCapacity: "capacity",
+                    businessName: "businessName",
+                    certificateNumber:
+                      "previousCertificateNumber",
+                    verificationDate: "lastVerifiedAt",
+                    expiryDate: "nextDueAt",
+                  };
 
-            <p className="mb-3 text-xs text-slate-500">
-              Error = observed value − test
-              load. Permissible error is a
-              prototype/demo configuration
-              from the instrument type seed,
-              not an official legal tolerance.
-            </p>
+                  if (key === "instrumentType") {
+                    const match = types.find(
+                      (type) =>
+                        type.name
+                          .toLowerCase()
+                          .includes(value.toLowerCase()) ||
+                        value
+                          .toLowerCase()
+                          .includes(type.name.toLowerCase()) ||
+                        type.code.toLowerCase() ===
+                          value.toLowerCase(),
+                    );
 
-            <div className="grid gap-4 md:grid-cols-4">
-              <Field label="Capacity">
-                <input
-                  name="capacity"
-                  type="number"
-                  step="0.0001"
-                  required
-                  defaultValue={30}
-                  className={inputClass()}
-                  disabled={locked}
-                />
-              </Field>
+                    if (match) {
+                      if (
+                        values.typeId &&
+                        values.typeId !== match.id &&
+                        !window.confirm(
+                          "Replace the selected instrument type with the OCR suggestion?",
+                        )
+                      ) {
+                        return;
+                      }
 
-              <Field label="Test load">
-                <input
-                  name="testLoad"
-                  type="number"
-                  step="0.0001"
-                  required
-                  className={inputClass()}
-                  disabled={locked}
-                />
-              </Field>
+                      setValues((prev) => ({
+                        ...prev,
+                        typeId: match.id,
+                      }));
+                    }
 
-              <Field label="Observed value">
-                <input
-                  name="observedValue"
-                  type="number"
-                  step="0.0001"
-                  required
-                  className={inputClass()}
-                  disabled={locked}
-                />
-              </Field>
-
-              <Field label="Permissible error (demo)">
-                <input
-                  name="permissibleError"
-                  type="number"
-                  step="0.0001"
-                  required
-                  defaultValue={
-                    demoTolerance
+                    return;
                   }
-                  className={inputClass()}
-                  disabled={locked}
-                />
-              </Field>
+
+                  const target = map[key];
+
+                  if (!target) return;
+
+                  if (
+                    current[target] &&
+                    current[target] !== value &&
+                    !window.confirm(
+                      `Replace existing ${target} with the OCR suggestion?`,
+                    )
+                  ) {
+                    return;
+                  }
+
+                  setValues((prev) => ({
+                    ...prev,
+                    [target]: value,
+                  }));
+                }}
+              />
             </div>
+          </div>
+        </div>
 
-            {!locked ? (
-              <button
-                disabled={pending}
-                className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
-              >
-                Add measurement
-              </button>
-            ) : null}
-
-            <table className="mt-4 w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-2 py-2">
-                    Test load
-                  </th>
-                  <th>Observed</th>
-                  <th>Error</th>
-                  <th>Demo limit</th>
-                  <th>Row result</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {item.measurements.map(
-                  (row) => (
-                    <tr
-                      key={row.id}
-                      className="border-t"
-                    >
-                      <td className="px-2 py-2">
-                        {row.testLoad}
-                      </td>
-
-                      <td>
-                        {row.observedValue}
-                      </td>
-
-                      <td>{row.error}</td>
-
-                      <td>
-                        {
-                          row.permissibleError
-                        }
-                      </td>
-
-                      <td>
-                        <StatusBadge
-                          status={
-                            row.result
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </form>
-
-          <form
-            onSubmit={addPhoto}
-            className="rounded border border-slate-200 bg-white p-5"
+        <Field label="Instrument type">
+          <select
+            name="typeId"
+            required
+            className={inputClass()}
+            value={values.typeId}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                typeId: event.target.value,
+              }))
+            }
           >
-            <h3 className="mb-3 font-semibold text-navy">
-              Inspection photos
-            </h3>
+            <option value="">Select type</option>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Photo kind">
-                <select
-                  name="kind"
-                  className={inputClass()}
-                  disabled={locked}
-                >
-                  <option value="INSTRUMENT_FRONT">
-                    Instrument front
-                  </option>
+            {types.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name} ({type.code})
+              </option>
+            ))}
+          </select>
+        </Field>
 
-                  <option value="SERIAL_NUMBER">
-                    Serial number
-                  </option>
-
-                  <option value="SEAL_STAMP">
-                    Seal / stamp
-                  </option>
-
-                  <option value="LOCATION_CONTEXT">
-                    Location context
-                  </option>
-
-                  <option value="MEASUREMENT_DISPLAY">
-                    Measurement display
-                  </option>
-                </select>
-              </Field>
-
-              <Field label="Photo (JPG/PNG)">
-                <input
-                  name="photo"
-                  type="file"
-                  accept="image/*"
-                  required
-                  disabled={locked}
-                  className="text-sm"
-                />
-              </Field>
-            </div>
-
-            {!locked ? (
-              <button
-                disabled={pending}
-                className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
-              >
-                Upload photo
-              </button>
-            ) : null}
-
-            <ul className="mt-3 list-disc pl-5 text-sm">
-              {item.photos.map(
-                (photo) => (
-                  <li key={photo.id}>
-                    {photo.filename} ·{" "}
-                    {photo.kind} ·{" "}
-                    {formatDateTime(
-                      photo.capturedAt,
-                    )}
-                  </li>
-                ),
-              )}
-            </ul>
-          </form>
-
-          {!locked ? (
-            <div className="flex flex-wrap gap-3">
-              <button
-                disabled={pending}
-                onClick={() =>
-                  complete("PASS")
-                }
-                className="rounded bg-indiaGreen px-4 py-2 text-sm font-semibold text-white"
-              >
-                Submit PASS
-              </button>
-
-              <button
-                disabled={pending}
-                onClick={() =>
-                  complete("FAIL")
-                }
-                className="rounded bg-red-700 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Submit FAIL
-              </button>
-
-              <button
-                disabled={pending}
-                onClick={() =>
-                  complete(
-                    "REQUIRES_REVIEW",
-                  )
-                }
-                className="rounded border border-navy px-4 py-2 text-sm font-semibold text-navy"
-              >
-                Submit for review
-              </button>
-            </div>
+        <Field label="Business / establishment">
+          {newBusiness || businesses.length === 0 ? (
+            <input
+              name="businessName"
+              required
+              placeholder="Business name"
+              className={inputClass()}
+              value={values.businessName}
+              onChange={(event) =>
+                setValues((prev) => ({
+                  ...prev,
+                  businessName: event.target.value,
+                }))
+              }
+            />
           ) : (
-            <>
-              <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                Inspection submitted
-                {item.result
-                  ? ` (${item.result})`
-                  : ""}
-                .
+            <select
+              name="businessId"
+              required
+              className={inputClass()}
+            >
+              {businesses.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {businesses.length > 0 ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-navy underline"
+              onClick={() =>
+                setNewBusiness((value) => !value)
+              }
+            >
+              {newBusiness
+                ? "Use existing business"
+                : "Add a new business"}
+            </button>
+          ) : null}
+        </Field>
+
+        {newBusiness ? (
+          <Field label="GSTIN (optional)">
+            <input
+              name="gstin"
+              className={inputClass()}
+            />
+          </Field>
+        ) : (
+          <div />
+        )}
+
+        <Field label="Manufacturer">
+          <input
+            name="manufacturer"
+            required
+            className={inputClass()}
+            value={values.manufacturer}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                manufacturer: event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <Field label="Model">
+          <input
+            name="model"
+            required
+            className={inputClass()}
+            value={values.model}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                model: event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <Field label="Serial number">
+          <input
+            name="serialNumber"
+            required
+            className={inputClass()}
+            value={values.serialNumber}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                serialNumber: event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <Field label="Capacity / range">
+          <input
+            name="capacity"
+            required
+            placeholder="e.g. 30 kg"
+            className={inputClass()}
+            value={values.capacity}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                capacity: event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <Field label="Accuracy class (optional)">
+          <input
+            name="accuracyClass"
+            className={inputClass()}
+          />
+        </Field>
+
+        <Field label="Purpose / use">
+          <input
+            name="purpose"
+            placeholder="Retail counter, weighbridge, fuel dispenser..."
+            className={inputClass()}
+          />
+        </Field>
+
+        <Field label="Address">
+          <input
+            name="address"
+            required
+            className={inputClass()}
+          />
+        </Field>
+
+        <Field label="City">
+          <input
+            name="city"
+            required
+            defaultValue="Bengaluru"
+            className={inputClass()}
+          />
+        </Field>
+
+        <Field label="District">
+          <input
+            name="district"
+            defaultValue="Bengaluru Urban"
+            className={inputClass()}
+          />
+        </Field>
+
+        <Field label="State">
+          <input
+            name="state"
+            required
+            defaultValue="Karnataka"
+            className={inputClass()}
+          />
+        </Field>
+
+        <div className="md:col-span-2 rounded border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-navy">
+                Registered instrument location
+              </h3>
+
+              <p className="mt-1 text-sm text-slate-600">
+                Capture the location where this instrument is
+                installed or used.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={captureCurrentLocation}
+              disabled={locationPending}
+              className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {locationPending
+                ? "Capturing location..."
+                : capturedLocation
+                  ? "Capture again"
+                  : "Use current location"}
+            </button>
+          </div>
+
+          {locationError ? (
+            <p className="mt-3 text-sm text-red-600">
+              {locationError}
+            </p>
+          ) : null}
+
+          {capturedLocation ? (
+            <div className="mt-4 rounded border border-slate-200 bg-white p-3">
+              <p className="text-sm font-semibold text-slate-800">
+                Location captured ✓
               </p>
 
-              {item.result === "PASS" &&
-              canIssue ? (
-                <div className="flex flex-wrap gap-3">
-                  {item.certificate ? (
-                    <>
-                      <Link
-                        href={`/certificates/${item.certificate.id}`}
-                        className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
-                      >
-                        Open certificate{" "}
-                        {
-                          item.certificate
-                            .certificateNumber
-                        }
-                      </Link>
-
-                      <button
-                        disabled={pending}
-                        onClick={() =>
-                          downloadAuthorized(
-                            `/api/certificates/${item.certificate!.id}/pdf`,
-                            `${item.certificate!.certificateNumber}.pdf`,
-                          )
-                        }
-                        className="rounded border border-navy px-4 py-2 text-sm font-semibold text-navy"
-                      >
-                        Download PDF
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      disabled={pending}
-                      onClick={
-                        generateCertificate
-                      }
-                      className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Generate verification
-                      certificate
-                    </button>
-                  )}
+              <div className="mt-2 grid gap-2 text-sm text-slate-600 md:grid-cols-3">
+                <div>
+                  <span className="font-medium">
+                    Latitude:
+                  </span>{" "}
+                  {capturedLocation.latitude.toFixed(6)}
                 </div>
-              ) : null}
-            </>
+
+                <div>
+                  <span className="font-medium">
+                    Longitude:
+                  </span>{" "}
+                  {capturedLocation.longitude.toFixed(6)}
+                </div>
+
+                <div>
+                  <span className="font-medium">
+                    Accuracy:
+                  </span>{" "}
+                  {capturedLocation.accuracy !== null
+                    ? `±${Math.round(
+                        capturedLocation.accuracy,
+                      )} m`
+                    : "Unavailable"}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-amber-700">
+              Location has not been captured yet.
+            </p>
           )}
         </div>
-      ) : null}
+
+        <div className="md:col-span-2 border-t pt-4">
+          <h3 className="mb-3 font-semibold text-navy">
+            Existing certificate (if any)
+          </h3>
+        </div>
+
+        <Field label="Previous certificate number">
+          <input
+            name="previousCertificateNumber"
+            className={inputClass()}
+            value={values.previousCertificateNumber}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                previousCertificateNumber:
+                  event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <Field label="Last verification date">
+          <input
+            name="lastVerifiedAt"
+            type="date"
+            className={inputClass()}
+            value={values.lastVerifiedAt}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                lastVerifiedAt: event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <Field label="Valid until / next due date">
+          <input
+            name="nextDueAt"
+            type="date"
+            className={inputClass()}
+            value={values.nextDueAt}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                nextDueAt: event.target.value,
+              }))
+            }
+          />
+        </Field>
+
+        <div className="md:col-span-2">
+          <button
+            disabled={pending || locationPending}
+            className="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {pending
+              ? "Saving..."
+              : "Save instrument"}
+          </button>
+        </div>
+      </form>
     </AppShell>
   );
 }
