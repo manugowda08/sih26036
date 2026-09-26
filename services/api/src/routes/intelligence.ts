@@ -4,6 +4,7 @@ import { extractWithIntelligence, intelligenceHealth } from "../lib/intelligence
 import { compareOcrToInstrument, type OcrField } from "../lib/ocr-mismatch.js";
 import { requireRoles } from "../plugins/rbac.js";
 import { calculateReviewPriority } from "../lib/review-priority.js";
+import { getReviewHistorySignals } from "../lib/review-history.js";
 
 const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_EXT = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp"]);
@@ -78,8 +79,13 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     const ocrFields = extracted.data.fields as Record<string, OcrField>;
     const mismatches = compareOcrToInstrument(ocrFields, registered);
     
-    const reviewPriority = calculateReviewPriority({
+    const historySignals = instrumentId
+  ? await getReviewHistorySignals(instrumentId)
+  : undefined;
+
+const reviewPriority = calculateReviewPriority({
   ocrMismatches: mismatches,
+  ...(historySignals ?? {}),
 });
    const result = {
   available: true,
@@ -90,6 +96,7 @@ export async function intelligenceRoutes(app: FastifyInstance) {
   engine: extracted.data.engine,
   source: extracted.data.source,
   mismatches,
+  historySignals,
   reviewPriority,
   registered,
 };
@@ -109,11 +116,13 @@ export async function intelligenceRoutes(app: FastifyInstance) {
               data: {
                 ocrRawText: extracted.data.rawText,
                 ocrResult: {
-                  fields: ocrFields,
-                  warnings: extracted.data.warnings,
-                  mismatches,
-                  engine: extracted.data.engine,
-                },
+                fields: ocrFields,
+                warnings: extracted.data.warnings,
+                mismatches,
+                historySignals,
+                reviewPriority,
+                engine: extracted.data.engine,
+              },
                 ocrAnalyzedAt: new Date(),
               },
             });
