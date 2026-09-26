@@ -14,13 +14,37 @@ type Inspection = {
   locationMismatch: boolean;
   startedAt: string | null;
   submittedAt: string | null;
-  location: { latitude: number | null; longitude: number | null; city: string | null } | null;
+  location: {
+    latitude: number | null;
+    longitude: number | null;
+    city: string | null;
+  } | null;
+  locationEvidence: {
+    registered: {
+      latitude: number;
+      longitude: number;
+    };
+    captured: {
+      latitude: number;
+      longitude: number;
+    };
+    distanceMeters: number;
+    calculation: "POSTGIS";
+    advisory: true;
+  } | null;
   application: {
     applicationNumber: string;
     status: string;
-    owner: { fullName: string; email: string } | null;
-    business: { name: string } | null;
-    schedule: { scheduledAt: string } | null;
+    owner: {
+      fullName: string;
+      email: string;
+    } | null;
+    business: {
+      name: string;
+    } | null;
+    schedule: {
+      scheduledAt: string;
+    } | null;
   } | null;
   instrument: {
     instrumentCode: string;
@@ -28,8 +52,16 @@ type Inspection = {
     manufacturer: string;
     model: string;
     capacity: string;
-    location: { address: string | null; city: string | null; state: string | null } | null;
-    type: { name: string; unit: string; defaultPermissibleError: number } | null;
+    location: {
+      address: string | null;
+      city: string | null;
+      state: string | null;
+    } | null;
+    type: {
+      name: string;
+      unit: string;
+      defaultPermissibleError: number;
+    } | null;
   } | null;
   checklist: {
     identificationVerified: boolean;
@@ -50,8 +82,17 @@ type Inspection = {
     permissibleError: number;
     result: string;
   }>;
-    photos: Array<{ id: string; filename: string; kind: string; capturedAt: string }>;
-  certificate: { id: string; certificateNumber: string; status: string } | null;
+  photos: Array<{
+    id: string;
+    filename: string;
+    kind: string;
+    capturedAt: string;
+  }>;
+  certificate: {
+    id: string;
+    certificateNumber: string;
+    status: string;
+  } | null;
 };
 
 const checklistFields = [
@@ -68,14 +109,21 @@ const checklistFields = [
 export default function InspectionDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+
   const [item, setItem] = useState<Inspection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
   const locked = Boolean(item?.submittedAt);
-  const canIssue = (getStoredUser()?.roles ?? []).some((role) => ["ADMIN", "LMO", "GATC"].includes(role));
+
+  const canIssue = (getStoredUser()?.roles ?? []).some((role) =>
+    ["ADMIN", "LMO", "GATC"].includes(role),
+  );
 
   function load() {
-    return api<Inspection>(`/api/inspections/${params.id}`).then(setItem);
+    return api<Inspection>(
+      `/api/inspections/${params.id}`,
+    ).then(setItem);
   }
 
   useEffect(() => {
@@ -83,100 +131,209 @@ export default function InspectionDetailPage() {
       router.replace("/");
       return;
     }
-    load().catch((err) => setError(err instanceof Error ? err.message : "Not found"));
+
+    load().catch((err) =>
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Not found",
+      ),
+    );
   }, [params.id, router]);
 
-  async function saveChecklist(event: FormEvent<HTMLFormElement>) {
+  async function saveChecklist(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
+
     if (!item) return;
+
     setPending(true);
     setError(null);
+
     const form = new FormData(event.currentTarget);
+
     const checklist: Record<string, boolean> = {};
-    for (const [key] of checklistFields) checklist[key] = form.get(key) === "on";
+
+    for (const [key] of checklistFields) {
+      checklist[key] = form.get(key) === "on";
+    }
+
     try {
-      const updated = await api<Inspection>(`/api/inspections/${item.id}`, {
-        method: "PUT",
-        body: {
-          remarks: String(form.get("remarks") || ""),
-          locationMismatch: form.get("locationMismatch") === "on",
-          latitude: form.get("latitude") ? Number(form.get("latitude")) : undefined,
-          longitude: form.get("longitude") ? Number(form.get("longitude")) : undefined,
-          checklist,
+      const updated = await api<Inspection>(
+        `/api/inspections/${item.id}`,
+        {
+          method: "PUT",
+          body: {
+            remarks: String(
+              form.get("remarks") || "",
+            ),
+            locationMismatch:
+              form.get("locationMismatch") === "on",
+            latitude: form.get("latitude")
+              ? Number(form.get("latitude"))
+              : undefined,
+            longitude: form.get("longitude")
+              ? Number(form.get("longitude"))
+              : undefined,
+            checklist,
+          },
         },
-      });
+      );
+
       setItem(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not save",
+      );
     } finally {
       setPending(false);
     }
   }
 
-  async function addMeasurement(event: FormEvent<HTMLFormElement>) {
+  async function addMeasurement(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
+
     if (!item) return;
+
     setPending(true);
     setError(null);
+
     const form = new FormData(event.currentTarget);
-    const testLoad = Number(form.get("testLoad"));
-    const observedValue = Number(form.get("observedValue"));
+
+    const testLoad = Number(
+      form.get("testLoad"),
+    );
+
+    const observedValue = Number(
+      form.get("observedValue"),
+    );
+
     try {
-      const updated = await api<Inspection>(`/api/inspections/${item.id}/measurements`, {
-        method: "POST",
-        body: {
-          capacity: Number(form.get("capacity")),
-          testLoad,
-          observedValue,
-          permissibleError: Number(form.get("permissibleError")),
+      const updated = await api<Inspection>(
+        `/api/inspections/${item.id}/measurements`,
+        {
+          method: "POST",
+          body: {
+            capacity: Number(
+              form.get("capacity"),
+            ),
+            testLoad,
+            observedValue,
+            permissibleError: Number(
+              form.get("permissibleError"),
+            ),
+          },
         },
-      });
+      );
+
       setItem(updated);
       event.currentTarget.reset();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save measurement");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not save measurement",
+      );
     } finally {
       setPending(false);
     }
   }
 
-  async function addPhoto(event: FormEvent<HTMLFormElement>) {
+  async function addPhoto(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
+
     if (!item) return;
+
     setPending(true);
     setError(null);
+
     const form = event.currentTarget;
-    const file = (form.elements.namedItem("photo") as HTMLInputElement).files?.[0];
-    if (!file) return;
+
+    const file = (
+      form.elements.namedItem(
+        "photo",
+      ) as HTMLInputElement
+    ).files?.[0];
+
+    if (!file) {
+      setPending(false);
+      return;
+    }
+
     const payload = new FormData();
+
     payload.append("file", file);
-    payload.append("kind", String((form.elements.namedItem("kind") as HTMLSelectElement).value));
+
+    payload.append(
+      "kind",
+      String(
+        (
+          form.elements.namedItem(
+            "kind",
+          ) as HTMLSelectElement
+        ).value,
+      ),
+    );
+
     try {
-      const updated = await api<Inspection>(`/api/inspections/${item.id}/photos`, {
-        method: "POST",
-        formData: payload,
-      });
+      const updated = await api<Inspection>(
+        `/api/inspections/${item.id}/photos`,
+        {
+          method: "POST",
+          formData: payload,
+        },
+      );
+
       setItem(updated);
       form.reset();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not upload photo");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not upload photo",
+      );
     } finally {
       setPending(false);
     }
   }
 
-  async function complete(result: "PASS" | "FAIL" | "REQUIRES_REVIEW") {
+  async function complete(
+    result:
+      | "PASS"
+      | "FAIL"
+      | "REQUIRES_REVIEW",
+  ) {
     if (!item) return;
+
     setPending(true);
     setError(null);
+
     try {
-      const updated = await api<Inspection>(`/api/inspections/${item.id}/complete`, {
-        method: "POST",
-        body: { result, remarks: item.remarks },
-      });
+      const updated = await api<Inspection>(
+        `/api/inspections/${item.id}/complete`,
+        {
+          method: "POST",
+          body: {
+            result,
+            remarks: item.remarks,
+          },
+        },
+      );
+
       setItem(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not complete inspection");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not complete inspection",
+      );
     } finally {
       setPending(false);
     }
@@ -184,180 +341,590 @@ export default function InspectionDetailPage() {
 
   async function generateCertificate() {
     if (!item) return;
+
     setPending(true);
     setError(null);
+
     try {
-      const cert = await api<{ id: string }>(`/api/certificates`, {
-        method: "POST",
-        body: { inspectionId: item.id },
-      });
+      const cert = await api<{ id: string }>(
+        "/api/certificates",
+        {
+          method: "POST",
+          body: {
+            inspectionId: item.id,
+          },
+        },
+      );
+
       await load();
-      router.push(`/certificates/${cert.id}`);
+
+      router.push(
+        `/certificates/${cert.id}`,
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate certificate");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not generate certificate",
+      );
     } finally {
       setPending(false);
     }
   }
 
-  const demoTolerance = item?.instrument?.type?.defaultPermissibleError ?? 0.5;
+  const demoTolerance =
+    item?.instrument?.type
+      ?.defaultPermissibleError ?? 0.5;
 
   return (
     <AppShell>
       <ErrorText message={error} />
+
       {item ? (
         <div className="space-y-5">
           <div className="rounded border border-slate-200 bg-white p-5">
-            <p className="text-xs uppercase tracking-widest text-slate-500">Field inspection</p>
-            <h2 className="text-2xl font-semibold text-navy">{item.instrument?.instrumentCode}</h2>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <StatusBadge status={item.application?.status ?? "ASSIGNED"} />
-              {item.result ? <StatusBadge status={item.result} /> : null}
-            </div>
-            <p className="mt-3 text-sm">Application {item.application?.applicationNumber}</p>
-            <p className="text-sm">Owner {item.application?.owner?.fullName} · {item.application?.business?.name}</p>
-            <p className="text-sm">Scheduled {formatDateTime(item.application?.schedule?.scheduledAt)}</p>
-            <p className="text-sm">Started {formatDateTime(item.startedAt)}</p>
-          </div>
+            <p className="text-xs uppercase tracking-widest text-slate-500">
+              Field inspection
+            </p>
 
-          <div className="rounded border border-slate-200 bg-white p-5 text-sm">
-            <h3 className="font-semibold">Instrument</h3>
-            <p>{item.instrument?.manufacturer} {item.instrument?.model} · SN {item.instrument?.serialNumber}</p>
-            <p>Capacity / range: {item.instrument?.capacity}</p>
-            <p>Type: {item.instrument?.type?.name} ({item.instrument?.type?.unit})</p>
-            <p>
-              Location: {item.instrument?.location?.address}, {item.instrument?.location?.city}, {item.instrument?.location?.state}
+            <h2 className="text-2xl font-semibold text-navy">
+              {item.instrument?.instrumentCode}
+            </h2>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <StatusBadge
+                status={
+                  item.application?.status ??
+                  "ASSIGNED"
+                }
+              />
+
+              {item.result ? (
+                <StatusBadge
+                  status={item.result}
+                />
+              ) : null}
+            </div>
+
+            <p className="mt-3 text-sm">
+              Application{" "}
+              {
+                item.application
+                  ?.applicationNumber
+              }
+            </p>
+
+            <p className="text-sm">
+              Owner{" "}
+              {
+                item.application?.owner
+                  ?.fullName
+              }{" "}
+              ·{" "}
+              {
+                item.application?.business
+                  ?.name
+              }
+            </p>
+
+            <p className="text-sm">
+              Scheduled{" "}
+              {formatDateTime(
+                item.application?.schedule
+                  ?.scheduledAt,
+              )}
+            </p>
+
+            <p className="text-sm">
+              Started{" "}
+              {formatDateTime(
+                item.startedAt,
+              )}
             </p>
           </div>
 
-          <form onSubmit={saveChecklist} className="rounded border border-slate-200 bg-white p-5">
-            <h3 className="mb-3 font-semibold text-navy">Checklist, GPS and remarks</h3>
+          <div className="rounded border border-slate-200 bg-white p-5 text-sm">
+            <h3 className="font-semibold">
+              Instrument
+            </h3>
+
+            <p>
+              {
+                item.instrument
+                  ?.manufacturer
+              }{" "}
+              {item.instrument?.model} · SN{" "}
+              {
+                item.instrument
+                  ?.serialNumber
+              }
+            </p>
+
+            <p>
+              Capacity / range:{" "}
+              {item.instrument?.capacity}
+            </p>
+
+            <p>
+              Type:{" "}
+              {item.instrument?.type?.name} (
+              {item.instrument?.type?.unit})
+            </p>
+
+            <p>
+              Location:{" "}
+              {
+                item.instrument?.location
+                  ?.address
+              }
+              ,{" "}
+              {
+                item.instrument?.location
+                  ?.city
+              }
+              ,{" "}
+              {
+                item.instrument?.location
+                  ?.state
+              }
+            </p>
+          </div>
+
+          <form
+            onSubmit={saveChecklist}
+            className="rounded border border-slate-200 bg-white p-5"
+          >
+            <h3 className="mb-3 font-semibold text-navy">
+              Checklist, GPS and remarks
+            </h3>
+
             <div className="grid gap-2 md:grid-cols-2">
-              {checklistFields.map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 text-sm">
-                  <input name={key} type="checkbox" defaultChecked={Boolean(item.checklist?.[key])} disabled={locked} />
-                  {label}
-                </label>
-              ))}
+              {checklistFields.map(
+                ([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <input
+                      name={key}
+                      type="checkbox"
+                      defaultChecked={Boolean(
+                        item.checklist?.[
+                          key
+                        ],
+                      )}
+                      disabled={locked}
+                    />
+
+                    {label}
+                  </label>
+                ),
+              )}
             </div>
+
             <label className="mt-3 flex items-center gap-2 text-sm">
-              <input name="locationMismatch" type="checkbox" defaultChecked={item.locationMismatch} disabled={locked} />
+              <input
+                name="locationMismatch"
+                type="checkbox"
+                defaultChecked={
+                  item.locationMismatch
+                }
+                disabled={locked}
+              />
+
               Location mismatch observed
             </label>
+
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <Field label="GPS latitude">
-                <input name="latitude" type="number" step="0.0001" defaultValue={item.location?.latitude ?? 12.9716} className={inputClass()} disabled={locked} />
+                <input
+                  name="latitude"
+                  type="number"
+                  step="0.0001"
+                  defaultValue={
+                    item.location
+                      ?.latitude ?? ""
+                  }
+                  className={inputClass()}
+                  disabled={locked}
+                />
               </Field>
+
               <Field label="GPS longitude">
-                <input name="longitude" type="number" step="0.0001" defaultValue={item.location?.longitude ?? 77.5946} className={inputClass()} disabled={locked} />
+                <input
+                  name="longitude"
+                  type="number"
+                  step="0.0001"
+                  defaultValue={
+                    item.location
+                      ?.longitude ?? ""
+                  }
+                  className={inputClass()}
+                  disabled={locked}
+                />
               </Field>
             </div>
+
+            {item.locationEvidence ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      Location evidence
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-600">
+                      Registered location
+                      compared with captured
+                      inspection GPS.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                    {
+                      item.locationEvidence
+                        .calculation
+                    }
+                  </span>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-sm text-slate-600">
+                    Distance from registered
+                    location
+                  </p>
+
+                  <p className="mt-1 text-2xl font-semibold text-slate-900">
+                    {item.locationEvidence.distanceMeters.toFixed(
+                      1,
+                    )}{" "}
+                    m
+                  </p>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Registered GPS
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-800">
+                      {item.locationEvidence.registered.latitude.toFixed(
+                        6,
+                      )}
+                      ,{" "}
+                      {item.locationEvidence.registered.longitude.toFixed(
+                        6,
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Captured GPS
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-800">
+                      {item.locationEvidence.captured.latitude.toFixed(
+                        6,
+                      )}
+                      ,{" "}
+                      {item.locationEvidence.captured.longitude.toFixed(
+                        6,
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs text-slate-500">
+                  This location evidence is
+                  provided for officer review.
+                  It is not an automatic
+                  compliance or Legal Metrology
+                  decision.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4">
+                <p className="font-medium text-slate-800">
+                  Location evidence
+                </p>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Capture and save field GPS
+                  to calculate the distance
+                  from the registered
+                  instrument location.
+                </p>
+              </div>
+            )}
+
             <Field label="Remarks">
-              <textarea name="remarks" rows={3} defaultValue={item.remarks ?? ""} className={inputClass()} disabled={locked} />
+              <textarea
+                name="remarks"
+                rows={3}
+                defaultValue={
+                  item.remarks ?? ""
+                }
+                className={inputClass()}
+                disabled={locked}
+              />
             </Field>
+
             {!locked ? (
-              <button disabled={pending} className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white">
+              <button
+                disabled={pending}
+                className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
+              >
                 Save inspection notes
               </button>
             ) : null}
           </form>
 
-          <form onSubmit={addMeasurement} className="rounded border border-slate-200 bg-white p-5">
-            <h3 className="font-semibold text-navy">Test measurement</h3>
+          <form
+            onSubmit={addMeasurement}
+            className="rounded border border-slate-200 bg-white p-5"
+          >
+            <h3 className="font-semibold text-navy">
+              Test measurement
+            </h3>
+
             <p className="mb-3 text-xs text-slate-500">
-              Error = observed value − test load. Permissible error is a prototype/demo configuration from the
-              instrument type seed, not an official legal tolerance.
+              Error = observed value − test
+              load. Permissible error is a
+              prototype/demo configuration
+              from the instrument type seed,
+              not an official legal tolerance.
             </p>
+
             <div className="grid gap-4 md:grid-cols-4">
               <Field label="Capacity">
-                <input name="capacity" type="number" step="0.0001" required defaultValue={30} className={inputClass()} disabled={locked} />
+                <input
+                  name="capacity"
+                  type="number"
+                  step="0.0001"
+                  required
+                  defaultValue={30}
+                  className={inputClass()}
+                  disabled={locked}
+                />
               </Field>
+
               <Field label="Test load">
-                <input name="testLoad" type="number" step="0.0001" required className={inputClass()} disabled={locked} />
+                <input
+                  name="testLoad"
+                  type="number"
+                  step="0.0001"
+                  required
+                  className={inputClass()}
+                  disabled={locked}
+                />
               </Field>
+
               <Field label="Observed value">
-                <input name="observedValue" type="number" step="0.0001" required className={inputClass()} disabled={locked} />
+                <input
+                  name="observedValue"
+                  type="number"
+                  step="0.0001"
+                  required
+                  className={inputClass()}
+                  disabled={locked}
+                />
               </Field>
+
               <Field label="Permissible error (demo)">
-                <input name="permissibleError" type="number" step="0.0001" required defaultValue={demoTolerance} className={inputClass()} disabled={locked} />
+                <input
+                  name="permissibleError"
+                  type="number"
+                  step="0.0001"
+                  required
+                  defaultValue={
+                    demoTolerance
+                  }
+                  className={inputClass()}
+                  disabled={locked}
+                />
               </Field>
             </div>
+
             {!locked ? (
-              <button disabled={pending} className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white">
+              <button
+                disabled={pending}
+                className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
+              >
                 Add measurement
               </button>
             ) : null}
+
             <table className="mt-4 w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-2 py-2">Test load</th>
+                  <th className="px-2 py-2">
+                    Test load
+                  </th>
                   <th>Observed</th>
                   <th>Error</th>
                   <th>Demo limit</th>
                   <th>Row result</th>
                 </tr>
               </thead>
+
               <tbody>
-                {item.measurements.map((row) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="px-2 py-2">{row.testLoad}</td>
-                    <td>{row.observedValue}</td>
-                    <td>{row.error}</td>
-                    <td>{row.permissibleError}</td>
-                    <td><StatusBadge status={row.result} /></td>
-                  </tr>
-                ))}
+                {item.measurements.map(
+                  (row) => (
+                    <tr
+                      key={row.id}
+                      className="border-t"
+                    >
+                      <td className="px-2 py-2">
+                        {row.testLoad}
+                      </td>
+
+                      <td>
+                        {row.observedValue}
+                      </td>
+
+                      <td>{row.error}</td>
+
+                      <td>
+                        {
+                          row.permissibleError
+                        }
+                      </td>
+
+                      <td>
+                        <StatusBadge
+                          status={
+                            row.result
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </form>
 
-          <form onSubmit={addPhoto} className="rounded border border-slate-200 bg-white p-5">
-            <h3 className="mb-3 font-semibold text-navy">Inspection photos</h3>
+          <form
+            onSubmit={addPhoto}
+            className="rounded border border-slate-200 bg-white p-5"
+          >
+            <h3 className="mb-3 font-semibold text-navy">
+              Inspection photos
+            </h3>
+
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Photo kind">
-                <select name="kind" className={inputClass()} disabled={locked}>
-                  <option value="INSTRUMENT_FRONT">Instrument front</option>
-                  <option value="SERIAL_NUMBER">Serial number</option>
-                  <option value="SEAL_STAMP">Seal / stamp</option>
-                  <option value="LOCATION_CONTEXT">Location context</option>
-                  <option value="MEASUREMENT_DISPLAY">Measurement display</option>
+                <select
+                  name="kind"
+                  className={inputClass()}
+                  disabled={locked}
+                >
+                  <option value="INSTRUMENT_FRONT">
+                    Instrument front
+                  </option>
+
+                  <option value="SERIAL_NUMBER">
+                    Serial number
+                  </option>
+
+                  <option value="SEAL_STAMP">
+                    Seal / stamp
+                  </option>
+
+                  <option value="LOCATION_CONTEXT">
+                    Location context
+                  </option>
+
+                  <option value="MEASUREMENT_DISPLAY">
+                    Measurement display
+                  </option>
                 </select>
               </Field>
+
               <Field label="Photo (JPG/PNG)">
-                <input name="photo" type="file" accept="image/*" required disabled={locked} className="text-sm" />
+                <input
+                  name="photo"
+                  type="file"
+                  accept="image/*"
+                  required
+                  disabled={locked}
+                  className="text-sm"
+                />
               </Field>
             </div>
+
             {!locked ? (
-              <button disabled={pending} className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white">
+              <button
+                disabled={pending}
+                className="mt-3 rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
+              >
                 Upload photo
               </button>
             ) : null}
+
             <ul className="mt-3 list-disc pl-5 text-sm">
-              {item.photos.map((photo) => (
-                <li key={photo.id}>{photo.filename} · {photo.kind} · {formatDateTime(photo.capturedAt)}</li>
-              ))}
+              {item.photos.map(
+                (photo) => (
+                  <li key={photo.id}>
+                    {photo.filename} ·{" "}
+                    {photo.kind} ·{" "}
+                    {formatDateTime(
+                      photo.capturedAt,
+                    )}
+                  </li>
+                ),
+              )}
             </ul>
           </form>
 
           {!locked ? (
             <div className="flex flex-wrap gap-3">
-              <button disabled={pending} onClick={() => complete("PASS")} className="rounded bg-indiaGreen px-4 py-2 text-sm font-semibold text-white">
+              <button
+                disabled={pending}
+                onClick={() =>
+                  complete("PASS")
+                }
+                className="rounded bg-indiaGreen px-4 py-2 text-sm font-semibold text-white"
+              >
                 Submit PASS
               </button>
-              <button disabled={pending} onClick={() => complete("FAIL")} className="rounded bg-red-700 px-4 py-2 text-sm font-semibold text-white">
+
+              <button
+                disabled={pending}
+                onClick={() =>
+                  complete("FAIL")
+                }
+                className="rounded bg-red-700 px-4 py-2 text-sm font-semibold text-white"
+              >
                 Submit FAIL
               </button>
-              <button disabled={pending} onClick={() => complete("REQUIRES_REVIEW")} className="rounded border border-navy px-4 py-2 text-sm font-semibold text-navy">
+
+              <button
+                disabled={pending}
+                onClick={() =>
+                  complete(
+                    "REQUIRES_REVIEW",
+                  )
+                }
+                className="rounded border border-navy px-4 py-2 text-sm font-semibold text-navy"
+              >
                 Submit for review
               </button>
             </div>
           ) : (
             <>
               <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                Inspection submitted{item.result ? ` (${item.result})` : ""}.
+                Inspection submitted
+                {item.result
+                  ? ` (${item.result})`
+                  : ""}
+                .
               </p>
 
-              {item.result === "PASS" && canIssue ? (
+              {item.result === "PASS" &&
+              canIssue ? (
                 <div className="flex flex-wrap gap-3">
                   {item.certificate ? (
                     <>
@@ -365,7 +932,11 @@ export default function InspectionDetailPage() {
                         href={`/certificates/${item.certificate.id}`}
                         className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
                       >
-                        Open certificate {item.certificate.certificateNumber}
+                        Open certificate{" "}
+                        {
+                          item.certificate
+                            .certificateNumber
+                        }
                       </Link>
 
                       <button
@@ -384,16 +955,20 @@ export default function InspectionDetailPage() {
                   ) : (
                     <button
                       disabled={pending}
-                      onClick={generateCertificate}
+                      onClick={
+                        generateCertificate
+                      }
                       className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
                     >
-                      Generate verification certificate
+                      Generate verification
+                      certificate
                     </button>
                   )}
                 </div>
               ) : null}
             </>
-          )}     </div>
+          )}
+        </div>
       ) : null}
     </AppShell>
   );

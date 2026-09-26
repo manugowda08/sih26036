@@ -25,20 +25,29 @@ export const locationSchema = z.object({
   longitude: z.coerce.number().min(-180).max(180).optional(),
 });
 
+const instrumentLocationSchema = locationSchema.extend({
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
+});
+
 export const createBusinessSchema = z.object({
   name: z.string().trim().min(2).max(160),
   gstin: z.string().trim().max(20).optional(),
   location: locationSchema.optional(),
 });
 
-const emptyToUndef = (value: unknown) => (value === "" || value == null ? undefined : value);
+const emptyToUndef = (value: unknown) =>
+  value === "" || value == null ? undefined : value;
 
 const optionalDate = z.preprocess(
   emptyToUndef,
   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional(),
 );
 
-const optionalText = z.preprocess(emptyToUndef, z.string().trim().max(400).optional());
+const optionalText = z.preprocess(
+  emptyToUndef,
+  z.string().trim().max(400).optional(),
+);
 
 export const createInstrumentSchema = z
   .object({
@@ -51,8 +60,11 @@ export const createInstrumentSchema = z
     capacity: z.string().trim().min(1).max(80),
     accuracyClass: optionalText,
     purpose: optionalText,
-    location: locationSchema,
-    previousCertificateNumber: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
+    location: instrumentLocationSchema,
+    previousCertificateNumber: z.preprocess(
+      emptyToUndef,
+      z.string().trim().max(80).optional(),
+    ),
     lastVerifiedAt: optionalDate,
     nextDueAt: optionalDate,
   })
@@ -67,13 +79,16 @@ export const updateInstrumentSchema = z.object({
   capacity: z.string().trim().min(1).max(80).optional(),
   accuracyClass: z.string().trim().max(40).optional(),
   purpose: z.string().trim().max(400).optional(),
-  location: locationSchema.optional(),
+  location: instrumentLocationSchema.optional(),
 });
 
 export const createApplicationSchema = z.object({
   instrumentId: z.string().uuid(),
   kind: z.enum(["VERIFICATION", "REVERIFICATION"]),
-  notes: z.preprocess(emptyToUndef, z.string().trim().max(500).optional()),
+  notes: z.preprocess(
+    emptyToUndef,
+    z.string().trim().max(500).optional(),
+  ),
 });
 
 export const updateApplicationStatusSchema = z.object({
@@ -84,13 +99,19 @@ export const createScheduleSchema = z.object({
   applicationId: z.string().uuid(),
   scheduledAt: z.string().min(10),
   assignedOfficerId: z.string().uuid(),
-  assignmentReason: z.preprocess(emptyToUndef, z.string().trim().max(400).optional()),
+  assignmentReason: z.preprocess(
+    emptyToUndef,
+    z.string().trim().max(400).optional(),
+  ),
 });
 
 export const assignOfficerSchema = z.object({
   applicationId: z.string().uuid(),
   assignedOfficerId: z.string().uuid(),
-  assignmentReason: z.preprocess(emptyToUndef, z.string().trim().max(400).optional()),
+  assignmentReason: z.preprocess(
+    emptyToUndef,
+    z.string().trim().max(400).optional(),
+  ),
 });
 
 export const checklistSchema = z.object({
@@ -105,7 +126,10 @@ export const checklistSchema = z.object({
 });
 
 export const updateInspectionSchema = z.object({
-  remarks: z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
+  remarks: z.preprocess(
+    emptyToUndef,
+    z.string().trim().max(1000).optional(),
+  ),
   locationMismatch: z.boolean().optional(),
   latitude: z.coerce.number().min(-90).max(90).optional(),
   longitude: z.coerce.number().min(-180).max(180).optional(),
@@ -121,7 +145,10 @@ export const createMeasurementSchema = z.object({
 
 export const completeInspectionSchema = z.object({
   result: z.enum(["PASS", "FAIL", "REQUIRES_REVIEW"]),
-  remarks: z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
+  remarks: z.preprocess(
+    emptyToUndef,
+    z.string().trim().max(1000).optional(),
+  ),
 });
 
 export const createCertificateSchema = z.object({
@@ -133,8 +160,16 @@ export const prototypeDueSchema = z.object({
 });
 
 export const createReverificationSchema = z.object({
-  notes: z.preprocess(emptyToUndef, z.string().trim().max(500).optional()),
+  notes: z.preprocess(
+    emptyToUndef,
+    z.string().trim().max(500).optional(),
+  ),
 });
 
-export type CreateInstrumentInput = z.infer<typeof createInstrumentSchema>;
-export type CreateApplicationInput = z.infer<typeof createApplicationSchema>;
+export type CreateInstrumentInput = z.infer<
+  typeof createInstrumentSchema
+>;
+
+export type CreateApplicationInput = z.infer<
+  typeof createApplicationSchema
+>;

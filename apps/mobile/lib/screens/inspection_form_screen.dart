@@ -76,6 +76,122 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
   GeoPoint? _gps;
   DateTime? _gpsAt;
 
+  Widget _buildLocationEvidenceCard() {
+  final evidence = _detail.locationEvidence;
+
+  if (evidence == null) {
+    if (_gps != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'Location evidence',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Field GPS has been captured. '
+                'PostGIS location evidence will be available '
+                'after the inspection is synchronized with '
+                'the LM Smart server.',
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          'Location evidence will be available after '
+          'field GPS is captured.',
+        ),
+      ),
+    );
+  }
+
+  return Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Location evidence',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          const Text(
+            'Distance from registered location',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            '${evidence.distanceMeters.toStringAsFixed(1)} m',
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            'Registered GPS: '
+            '${evidence.registeredLatitude.toStringAsFixed(6)}, '
+            '${evidence.registeredLongitude.toStringAsFixed(6)}',
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            'Captured GPS: '
+            '${evidence.capturedLatitude.toStringAsFixed(6)}, '
+            '${evidence.capturedLongitude.toStringAsFixed(6)}',
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            'Calculated using ${evidence.calculation}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          const Text(
+            'This location evidence is provided for officer '
+            'review. It is not an automatic compliance or '
+            'Legal Metrology decision.',
+            style: TextStyle(
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
   @override
   void initState() {
     super.initState();
@@ -608,6 +724,8 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
           Text('Field latitude: ${_gps!.latitude.toStringAsFixed(6)}', style: const TextStyle(fontSize: 16)),
           Text('Field longitude: ${_gps!.longitude.toStringAsFixed(6)}', style: const TextStyle(fontSize: 16)),
           Text('Captured at: ${formatDateTime(_gpsAt)}', style: const TextStyle(fontSize: 16)),
+          const SizedBox(height: 16),
+          _buildLocationEvidenceCard(),
           if (distance != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),

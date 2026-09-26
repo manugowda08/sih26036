@@ -160,6 +160,53 @@ class InspectionMeasurement {
   }
 }
 
+class LocationEvidence {
+  const LocationEvidence({
+    required this.registeredLatitude,
+    required this.registeredLongitude,
+    required this.capturedLatitude,
+    required this.capturedLongitude,
+    required this.distanceMeters,
+    required this.calculation,
+    required this.advisory,
+  });
+
+  final double registeredLatitude;
+  final double registeredLongitude;
+
+  final double capturedLatitude;
+  final double capturedLongitude;
+
+  final double distanceMeters;
+  final String calculation;
+  final bool advisory;
+
+  factory LocationEvidence.fromJson(Map<String, dynamic> json) {
+    final registered =
+        json['registered'] as Map<String, dynamic>? ?? {};
+
+    final captured =
+        json['captured'] as Map<String, dynamic>? ?? {};
+
+    return LocationEvidence(
+      registeredLatitude:
+          (registered['latitude'] as num).toDouble(),
+      registeredLongitude:
+          (registered['longitude'] as num).toDouble(),
+      capturedLatitude:
+          (captured['latitude'] as num).toDouble(),
+      capturedLongitude:
+          (captured['longitude'] as num).toDouble(),
+      distanceMeters:
+          (json['distanceMeters'] as num).toDouble(),
+      calculation:
+          json['calculation'] as String? ?? 'POSTGIS',
+      advisory:
+          json['advisory'] == true,
+    );
+  }
+}
+
 class InspectionDetail {
   InspectionDetail({
     required this.id,
@@ -187,6 +234,7 @@ class InspectionDetail {
     this.locationText,
     this.fieldLat,
     this.fieldLng,
+    this.locationEvidence,
     Map<String, bool>? checklist,
     List<InspectionMeasurement>? measurements,
     List<InspectionPhoto>? photos,
@@ -219,6 +267,7 @@ class InspectionDetail {
   final String? locationText;
   final double? fieldLat;
   final double? fieldLng;
+  final LocationEvidence? locationEvidence;
   final Map<String, bool> checklist;
   final List<InspectionMeasurement> measurements;
   final List<InspectionPhoto> photos;
@@ -236,10 +285,15 @@ class InspectionDetail {
     for (final entry in checklistRaw.entries) {
       if (entry.value is bool) checklist[entry.key] = entry.value as bool;
     }
+    final locationEvidenceJson =
+    json['locationEvidence'] as Map<String, dynamic>?;
     return InspectionDetail(
       id: json['id'] as String,
       result: json['result'] as String?,
       remarks: json['remarks'] as String?,
+      locationEvidence: locationEvidenceJson == null
+        ? null
+        : LocationEvidence.fromJson(locationEvidenceJson),
       locationMismatch: json['locationMismatch'] == true,
       startedAt: _parseDate(json['startedAt']),
       submittedAt: _parseDate(json['submittedAt']),
@@ -276,6 +330,7 @@ class InspectionDetail {
           .whereType<Map<String, dynamic>>()
           .map(InspectionPhoto.fromJson)
           .toList(),
+      
     );
   }
 }
