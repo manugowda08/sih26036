@@ -1,5 +1,0 @@
-[33m5a0faa0[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m feat: add database-backed review history signals
-[33mc132110[m feat: add explainable review priority
-[33m29f1e62[m checkpoint: complete phase 7 and verified phase 8.1 OCR
-[33m47e7a40[m Complete the LMO Flutter inspection form with camera, GPS, and a configurable LAN API URL.
-[33mbbec8d5[m Add the LM Smart SIH prototype so the web API, database, and LMO Flutter inspection app can be versioned together.
