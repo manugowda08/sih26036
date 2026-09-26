@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { extractWithIntelligence, intelligenceHealth } from "../lib/intelligence-client.js";
 import { compareOcrToInstrument, type OcrField } from "../lib/ocr-mismatch.js";
 import { requireRoles } from "../plugins/rbac.js";
+import { calculateReviewPriority } from "../lib/review-priority.js";
 
 const ALLOWED_MIME = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_EXT = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp"]);
@@ -76,18 +77,22 @@ export async function intelligenceRoutes(app: FastifyInstance) {
 
     const ocrFields = extracted.data.fields as Record<string, OcrField>;
     const mismatches = compareOcrToInstrument(ocrFields, registered);
-
-    const result = {
-      available: true,
-      advisory: true,
-      rawText: extracted.data.rawText,
-      fields: ocrFields,
-      warnings: extracted.data.warnings,
-      engine: extracted.data.engine,
-      source: extracted.data.source,
-      mismatches,
-      registered,
-    };
+    
+    const reviewPriority = calculateReviewPriority({
+  ocrMismatches: mismatches,
+});
+   const result = {
+  available: true,
+  advisory: true,
+  rawText: extracted.data.rawText,
+  fields: ocrFields,
+  warnings: extracted.data.warnings,
+  engine: extracted.data.engine,
+  source: extracted.data.source,
+  mismatches,
+  reviewPriority,
+  registered,
+};
 
     if (documentId) {
       const document = await prisma.applicationDocument.findUnique({

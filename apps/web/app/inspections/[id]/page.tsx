@@ -352,33 +352,48 @@ export default function InspectionDetailPage() {
               </button>
             </div>
           ) : (
-            <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              Inspection submitted{item.result ? ` (${item.result})` : ""}.
-            </p>
-            {item.result === "PASS" && canIssue ? (
-              <div className="flex flex-wrap gap-3">
-                {item.certificate ? (
-                  <>
-                    <Link href={`/certificates/${item.certificate.id}`} className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white">
-                      Open certificate {item.certificate.certificateNumber}
-                    </Link>
+            <>
+              <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                Inspection submitted{item.result ? ` (${item.result})` : ""}.
+              </p>
+
+              {item.result === "PASS" && canIssue ? (
+                <div className="flex flex-wrap gap-3">
+                  {item.certificate ? (
+                    <>
+                      <Link
+                        href={`/certificates/${item.certificate.id}`}
+                        className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Open certificate {item.certificate.certificateNumber}
+                      </Link>
+
+                      <button
+                        disabled={pending}
+                        onClick={() =>
+                          downloadAuthorized(
+                            `/api/certificates/${item.certificate!.id}/pdf`,
+                            `${item.certificate!.certificateNumber}.pdf`,
+                          )
+                        }
+                        className="rounded border border-navy px-4 py-2 text-sm font-semibold text-navy"
+                      >
+                        Download PDF
+                      </button>
+                    </>
+                  ) : (
                     <button
                       disabled={pending}
-                      onClick={() => downloadAuthorized(`/api/certificates/${item.certificate!.id}/pdf`, `${item.certificate!.certificateNumber}.pdf`)}
-                      className="rounded border border-navy px-4 py-2 text-sm font-semibold text-navy"
+                      onClick={generateCertificate}
+                      className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white"
                     >
-                      Download PDF
+                      Generate verification certificate
                     </button>
-                  </>
-                ) : (
-                  <button disabled={pending} onClick={generateCertificate} className="rounded bg-navy px-4 py-2 text-sm font-semibold text-white">
-                    Generate verification certificate
-                  </button>
-                )}
-              </div>
-            ) : null}
-          )}
-        </div>
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}     </div>
       ) : null}
     </AppShell>
   );

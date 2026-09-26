@@ -5,6 +5,19 @@ import { api } from "@/lib/api";
 import { compareOcrToInstrument, type FieldMismatch, type OcrField, type RegisteredInstrument } from "@/lib/ocr-mismatch";
 import { ErrorText } from "@/components/ui";
 
+export type ReviewPriority = {
+  advisory: true;
+  score: number;
+  level: "NORMAL" | "ATTENTION" | "HIGH";
+  reasons: Array<{
+    code: string;
+    label: string;
+    points: number;
+    evidence?: string;
+  }>;
+  disclaimer: string;
+};
+
 export type OcrAnalysis = {
   available: boolean;
   advisory?: boolean;
@@ -12,6 +25,7 @@ export type OcrAnalysis = {
   fields: Record<string, OcrField>;
   warnings: string[];
   mismatches: FieldMismatch[];
+  reviewPriority?: ReviewPriority;
   error?: string;
 };
 
@@ -130,6 +144,78 @@ export function OcrAssist({
             <p className="text-xs text-emerald-800">No mismatches against the selected instrument for the extracted fields.</p>
           ) : null}
           <div className="grid gap-2">
+          {analysis.reviewPriority ? (
+  <div className="rounded border border-slate-300 bg-white p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Review priority
+        </p>
+        <p className="mt-1 text-lg font-bold text-navy">
+          {analysis.reviewPriority.level}
+        </p>
+      </div>
+
+      <div className="text-right">
+        <p className="text-2xl font-bold text-navy">
+          {analysis.reviewPriority.score}
+          <span className="text-sm font-medium text-slate-500"> / 100</span>
+        </p>
+        <p className="text-[11px] text-slate-500">
+          Prototype prioritization score
+        </p>
+      </div>
+    </div>
+
+    {analysis.reviewPriority.reasons.length ? (
+      <div className="mt-3">
+        <p className="text-xs font-semibold text-slate-700">
+          Why this needs attention
+        </p>
+
+        <ul className="mt-2 space-y-2">
+          {analysis.reviewPriority.reasons.map((reason) => (
+            <li
+              key={reason.code}
+              className="flex items-start justify-between gap-3 rounded bg-slate-50 px-3 py-2 text-sm"
+            >
+              <div>
+                <p className="font-medium text-slate-900">
+                  {reason.label}
+                </p>
+
+                {reason.evidence ? (
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {reason.evidence}
+                  </p>
+                ) : null}
+              </div>
+
+              <span className="whitespace-nowrap text-xs font-semibold text-slate-600">
+                +{reason.points}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : (
+      <p className="mt-3 text-xs text-emerald-800">
+        No review-priority signals were detected in this document analysis.
+      </p>
+    )}
+
+    <p className="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-5 text-slate-500">
+      {analysis.reviewPriority.disclaimer}
+    </p>
+
+    {Object.keys(edits).length ? (
+      <p className="mt-2 text-[11px] font-medium text-amber-700">
+        The score above reflects the original document analysis. Re-analyze the
+        document to recalculate the score after changing suggested values.
+      </p>
+    ) : null}
+  </div>
+) : null}
             {LABELS.map(({ key, label }) => {
               if (ignored[key]) return null;
               const field = fields[key];
