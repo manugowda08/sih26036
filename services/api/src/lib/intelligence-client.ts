@@ -11,7 +11,7 @@ type IntelligenceResult = {
 
 export type IntelligenceCall =
   | { ok: true; data: IntelligenceResult }
-  | { ok: false; available: false; error: string; statusCode: number };
+  | { ok: false; available: boolean; error: string; statusCode: number };
 
 export async function extractWithIntelligence(file: {
   buffer: Buffer;
@@ -38,8 +38,15 @@ export async function extractWithIntelligence(file: {
       error?: string;
     };
     if (!response.ok) {
-      const detail = typeof payload.detail === "string" ? payload.detail : payload.error || "OCR request failed";
-      return { ok: false, available: response.status !== 503, error: detail, statusCode: response.status };
+      const detail = 
+      typeof payload.detail === "string" 
+      ? payload.detail 
+      : payload.error || "OCR request failed";
+      return { 
+        ok: false, 
+        available: response.status !== 503, 
+        error: detail, 
+        statusCode: response.status };
     }
     return {
       ok: true,

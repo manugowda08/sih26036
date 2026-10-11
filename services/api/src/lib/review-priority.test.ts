@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { calculateReviewPriority } from "./review-priority";
+import { calculateReviewPriority } from "./review-priority.js";
 
 test("returns NORMAL when there are no review signals", () => {
   const result = calculateReviewPriority({});

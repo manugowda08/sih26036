@@ -44,7 +44,12 @@ export async function buildApp(env: AppEnv) {
       }
       try {
         const host = new URL(origin).hostname;
-        const allowed = origin === env.webOrigin || host === "localhost" || host === "127.0.0.1";
+
+        const allowed =
+          origin === env.webOrigin ||
+          (env.nodeEnv !== "production" &&
+            (host === "localhost" || host === "127.0.0.1"));
+
         callback(null, allowed);
       } catch {
         callback(null, false);
@@ -82,14 +87,26 @@ export async function buildApp(env: AppEnv) {
   await app.register(notificationRoutes);
   await app.register(intelligenceRoutes);
 
-  app.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
-    if (reply.sent) return;
-    const status = typeof error.statusCode === "number" ? error.statusCode : 500;
-    return reply.code(status).send({
-      error: status >= 500 ? "Internal server error" : error.message,
-    });
-  });
+ app.setErrorHandler((error, request, reply) => {
+  request.log.error(error);
 
+  if (reply.sent) return;
+
+  const status =
+    error instanceof Error &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number"
+      ? error.statusCode
+      : 500;
+
+  return reply.code(status).send({
+    error:
+      status >= 500
+        ? "Internal server error"
+        : error instanceof Error
+          ? error.message
+          : "Request failed",
+  });
+});
   return app;
 }

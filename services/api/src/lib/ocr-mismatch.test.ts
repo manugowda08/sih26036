@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compareOcrToInstrument } from "./ocr-mismatch.ts";
+import { compareOcrToInstrument } from "./ocr-mismatch.js";
 
 test("detects serial mismatch without calling it fraud", () => {
   const mismatches = compareOcrToInstrument(
